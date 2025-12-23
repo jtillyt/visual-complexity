@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mdp-simulation</title>
+  </head>
+  <body>
+    <div id="main-layout">
+        <div id="canvas-container">
+            <canvas id="renderCanvas"></canvas>
+        </div>
+        <div id="bottom-panel">
+            <div id="tools-section">
+                <div class="panel-header">Tools</div>
+                <div class="mode-buttons" id="tool-buttons">
+                    <!-- Buttons injected by JS -->
+                </div>
+                <div class="legend">
+                    <div class="legend-item"><div class="color-box" style="background: cyan;"></div>Policy</div>
+                    <div class="legend-item"><div class="color-box" style="background: lime;"></div>High V</div>
+                    <div class="legend-item"><div class="color-box" style="background: red;"></div>Low V</div>
+                </div>
+            </div>
+            <div id="info-section">
+                <div class="panel-header">Cell Inspector</div>
+                <div id="cell-info">
+                    <p>Hover over grid to inspect.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

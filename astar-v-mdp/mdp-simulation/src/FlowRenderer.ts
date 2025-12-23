@@ -1,0 +1,171 @@
+import { Scene } from '@babylonjs/core/scene';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Matrix, Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { GridSystem } from './GridSystem';
+import "@babylonjs/core/Meshes/thinInstanceMesh";
+
+export class FlowRenderer {
+    private gridSystem: GridSystem;
+    private scene: Scene;
+    private arrowMesh: Mesh;
+    
+    private numInstances: number;
+    private matrices: Float32Array;
+    
+    // Current and Target rotations for lerping
+    private currentAngles: Float32Array;
+    private targetAngles: Float32Array;
+    
+    private colors: Float32Array; // Added for value visualization
+
+    private lerpSpeed: number = 0.1;
+
+    constructor(gridSystem: GridSystem, scene: Scene) {
+        this.gridSystem = gridSystem;
+        this.scene = scene;
+        this.numInstances = gridSystem.width * gridSystem.height;
+        
+        this.matrices = new Float32Array(this.numInstances * 16);
+        this.currentAngles = new Float32Array(this.numInstances);
+        this.targetAngles = new Float32Array(this.numInstances);
+        this.colors = new Float32Array(this.numInstances * 4); // RGBA
+        
+        this.arrowMesh = this.createArrowMesh();
+        this.initializeInstances();
+        
+        // Register update loop for lerping
+        this.scene.onBeforeRenderObservable.add(() => {
+            this.animateArrows();
+        });
+    }
+
+    private createArrowMesh(): Mesh {
+        // Create a simple arrow pointing along +X (Right) as the default (Angle 0)
+        const shaft = MeshBuilder.CreateCylinder("shaft", { height: 0.4, diameter: 0.05 }, this.scene);
+        shaft.rotation.z = -Math.PI / 2; // Rotate from Y to X
+        shaft.position.x = 0.2;
+
+        const head = MeshBuilder.CreateCylinder("head", { height: 0.2, diameterTop: 0, diameterBottom: 0.15 }, this.scene);
+        head.rotation.z = -Math.PI / 2; // Rotate from Y to X
+        head.position.x = 0.5;
+
+        const arrow = Mesh.MergeMeshes([shaft, head], true, true, undefined, false, true)!;
+        arrow.name = "policyArrow";
+        
+        const material = new StandardMaterial("arrowMat", this.scene);
+        material.emissiveColor = new Color3(1, 1, 1); // Base white for vertex colors
+        material.disableLighting = true;
+        arrow.material = material;
+        arrow.useVertexColors = true; // Enable vertex colors
+        
+        return arrow;
+    }
+
+    private initializeInstances(): void {
+        const width = this.gridSystem.width;
+        const height = this.gridSystem.height;
+        
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const index = y * width + x;
+                const worldX = x + 0.5;
+                const worldZ = y + 0.5;
+                
+                // Start with random directions for testing
+                this.currentAngles[index] = Math.random() * Math.PI * 2;
+                this.targetAngles[index] = this.currentAngles[index];
+                
+                // Default color (Cyan)
+                this.colors[index * 4 + 0] = 0;
+                this.colors[index * 4 + 1] = 1;
+                this.colors[index * 4 + 2] = 1;
+                this.colors[index * 4 + 3] = 1;
+
+                this.updateMatrix(index, worldX, worldZ, this.currentAngles[index]);
+            }
+        }
+        
+        this.arrowMesh.thinInstanceSetBuffer("matrix", this.matrices, 16, false);
+        this.arrowMesh.thinInstanceSetBuffer("color", this.colors, 4, false);
+    }
+
+    private updateMatrix(index: number, x: number, z: number, angle: number): void {
+        const rotation = Quaternion.RotationAxis(Vector3.Up(), -angle); // Negate angle to match grid coordinates
+        const matrix = Matrix.Compose(
+            new Vector3(1, 1, 1),
+            rotation,
+            new Vector3(x, 0.1, z) // Slightly above grid
+        );
+        matrix.copyToArray(this.matrices, index * 16);
+    }
+
+    private animateArrows(): void {
+        const width = this.gridSystem.width;
+        let changed = false;
+
+        for (let i = 0; i < this.numInstances; i++) {
+            // Simple angle lerp
+            let diff = this.targetAngles[i] - this.currentAngles[i];
+            
+            // Wrap around
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+
+            if (Math.abs(diff) > 0.001) {
+                this.currentAngles[i] += diff * this.lerpSpeed;
+                const x = i % width + 0.5;
+                const z = Math.floor(i / width) + 0.5;
+                this.updateMatrix(i, x, z, this.currentAngles[i]);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            this.arrowMesh.thinInstanceBufferUpdated("matrix");
+        }
+    }
+
+    /**
+     * Update target directions and colors for the arrows based on value.
+     * @param directions Array of angles in radians
+     * @param values Array of value estimates
+     */
+    public updatePolicy(directions: Float32Array, values: Float32Array): void {
+        if (directions.length !== this.numInstances) return;
+        this.targetAngles.set(directions);
+
+        // Normalize values for coloring
+        let minVal = Infinity;
+        let maxVal = -Infinity;
+        for (let v of values) {
+            if (v > maxVal) maxVal = v;
+            if (v < minVal) minVal = v;
+        }
+        
+        const range = maxVal - minVal || 1;
+
+        for (let i = 0; i < this.numInstances; i++) {
+            const val = values[i];
+            const t = (val - minVal) / range; // 0 to 1
+            
+            // Red (Low) -> Green (High)
+            // Low (0): 1, 0, 0
+            // High (1): 0, 1, 0
+            // Mid (0.5): 1, 1, 0 (Yellow)
+            
+            const r = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
+            const g = t > 0.5 ? 1 : t * 2;
+            const b = 0;
+
+            this.colors[i * 4 + 0] = r;
+            this.colors[i * 4 + 1] = g;
+            this.colors[i * 4 + 2] = b;
+            this.colors[i * 4 + 3] = 1;
+        }
+        
+        this.arrowMesh.thinInstanceBufferUpdated("color");
+    }
+}
