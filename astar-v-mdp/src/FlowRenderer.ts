@@ -7,6 +7,11 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { GridSystem } from './GridSystem';
 import "@babylonjs/core/Meshes/thinInstanceMesh";
 
+/**
+ * FlowRenderer visualizes the policy field as a grid of floating arrows.
+ * Uses Babylon.js Thin Instances for high-performance rendering of 2500+ meshes.
+ * Handles smooth interpolation (lerping) of arrow directions.
+ */
 export class FlowRenderer {
     private gridSystem: GridSystem;
     private scene: Scene;
@@ -102,6 +107,9 @@ export class FlowRenderer {
         matrix.copyToArray(this.matrices, index * 16);
     }
 
+    /**
+     * Smoothly interpolates the arrow rotation towards the target angle.
+     */
     private animateArrows(): void {
         const width = this.gridSystem.width;
         let changed = false;

@@ -1,6 +1,12 @@
 import { GridSystem, CellType } from './GridSystem';
+import type { Solver } from './Solver';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 
-export class MdpSolver {
+/**
+ * MdpSolver implements Value Iteration to solve the Bellman Equation.
+ * It provides a comprehensive policy for every cell in the grid, accounting for uncertainty.
+ */
+export class MdpSolver implements Solver {
     private grid: GridSystem;
     private values: Float32Array;
     public policy: Float32Array; // Angles in radians
@@ -11,7 +17,7 @@ export class MdpSolver {
     
     // Rewards
     private rewardGoal: number = 10.0;
-    private rewardWind: number = -2.0;
+    // private rewardWind: number = -2.0; // Removed, wind is invisible to planner
     private rewardStep: number = -0.1;
     private rewardWall: number = -1.0; // Penalty for hitting a wall
 
@@ -30,7 +36,11 @@ export class MdpSolver {
         this.policy = new Float32Array(size);
     }
 
-    public iterate(): void {
+    /**
+     * Performs one iteration of Value Iteration over the entire grid.
+     * @param _agentPosition Optional, ignored by MDP (solves for all states).
+     */
+    public iterate(_agentPosition?: Vector3): void {
         const nextValues = new Float32Array(this.values.length);
         const width = this.grid.width;
         const height = this.grid.height;
@@ -107,10 +117,11 @@ export class MdpSolver {
             reward += this.rewardWall; // Bumped into wall
         }
 
-        const nextCellType = this.grid.getCell(nx, ny);
-        if (nextCellType === CellType.Wind) {
-            reward += this.rewardWind;
-        }
+        // Wind is now invisible to the planner (no extra penalty)
+        // const nextCellType = this.grid.getCell(nx, ny);
+        // if (nextCellType === CellType.Wind) {
+        //     reward += this.rewardWind;
+        // }
 
         const nextIndex = this.grid.getFlatIndex(nx, ny);
         return reward + this.gamma * this.values[nextIndex];

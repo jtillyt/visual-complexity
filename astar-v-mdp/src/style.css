@@ -7,21 +7,24 @@ body {
   background-color: #111;
   font-family: 'Inter', sans-serif;
   color: #eee;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #main-layout {
     width: 100%;
     height: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 #canvas-container {
-    position: absolute;
-    top: 0;
-    left: 0;
+    flex-grow: 1;
     width: 100%;
-    bottom: 180px; /* Leave space for bottom panel */
+    position: relative; /* Changed from absolute to play nice with flex */
     background: #000;
     overflow: hidden;
+    min-height: 300px; /* Important for flex child to shrink */
 }
 
 #renderCanvas {
@@ -33,11 +36,9 @@ body {
 }
 
 #bottom-panel {
-    position: absolute;
-    bottom: 0;
-    left: 0;
     width: 100%;
-    height: 180px;
+    height: auto; /* Allow auto height */
+    min-height: 180px;
     background: #222;
     border-top: 1px solid #444;
     display: flex;
@@ -45,7 +46,8 @@ body {
     gap: 30px;
     box-shadow: 0 -4px 10px rgba(0,0,0,0.5);
     z-index: 10;
-    box-sizing: border-box; /* Ensure padding doesn't add to height */
+    box-sizing: border-box;
+    flex-shrink: 0; /* Prevent panel from shrinking */
 }
 
 #tools-section, #info-section {
@@ -115,6 +117,7 @@ body {
     margin-top: auto; /* Push to bottom of tool section */
     font-size: 0.85em;
     color: #aaa;
+    flex-wrap: wrap;
 }
 
 .legend-item {
@@ -146,4 +149,38 @@ body {
     justify-content: space-between;
     border-bottom: 1px solid #333;
     padding: 2px 0;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    #bottom-panel {
+        flex-direction: column;
+        gap: 15px;
+        padding: 10px;
+        height: auto;
+        max-height: 40vh; /* Limit height on mobile */
+        overflow-y: auto; /* Allow scrolling if content is too tall */
+    }
+
+    #tools-section {
+        border-right: none;
+        padding-right: 0;
+        border-bottom: 1px solid #444;
+        padding-bottom: 15px;
+    }
+
+    #info-section {
+        min-width: 0; /* Allow shrinking */
+    }
+
+    .mode-btn {
+        padding: 8px 12px;
+        font-size: 0.85em;
+        flex: 1 0 auto; /* Grow buttons to fill space */
+        text-align: center;
+    }
+    
+    .panel-header {
+        font-size: 1em;
+    }
 }
