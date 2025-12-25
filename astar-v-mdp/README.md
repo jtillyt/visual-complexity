@@ -21,45 +21,48 @@ Built with **Babylon.js**, **TypeScript**, and **Vite**.
 
 ### 1. Select Algorithm
 Use the dropdown in the tools panel to switch between:
--   **MDP (Probabilistic):** The default mode. The agent assumes the world is slippery (noise). It generates a "Policy Field" that guides the agent safely away from hazards, even if the path is longer.
--   **A* (Deterministic):** Finds the absolute shortest path. It assumes perfect movement and ignores the risk of slipping, often hugging walls or wind zones dangerously.
+-   **MDP (Probabilistic):** The agent assumes the world is slippery (noise). It generates a global "Policy Field" that guides the agent safely.
+-   **A* (Deterministic):** Finds the absolute shortest path. It assumes perfect movement and ignores environmental risks like wind during the planning phase.
 
 ### 2. Paint the World
-Use the toolbar or keyboard shortcuts to modify the grid:
--   **Goal (3):** Where the agent wants to go.
+-   **Goal (3):** The destination for the rover.
 -   **Wall (1):** Impassable obstacles.
--   **Wind (2):** High-cost zones. In MDP mode, these push the agent around.
+-   **Wind (2):** Invisible hazards that only affect the agent upon contact. When selected, you can configure:
+    -   **Direction:** The push vector of the wind (Up, Down, Left, Right).
+    -   **Force:** The magnitude of the push (how many blocks per second of offset).
 -   **Erase (0):** Clear tiles.
--   **Inspect (4):** Hover to see exact Value estimates and Policy angles.
+-   **Inspect (4):** Hover to see exact Value estimates, Policy angles, and Wind configurations.
 
 ### 3. Place Agent
 -   Select **Place Agent** or **Right Click** anywhere to teleport the rover.
--   Watch it follow the flow field!
+-   Watch it follow the policy field!
 
-## 🧠 The Math
+## 🧠 The "Rigid vs Fluid" Insight
 
-### MDP (Markov Decision Process)
-Uses **Value Iteration** to solve the Bellman Equation:
-$$ V(s) = R(s) + \gamma \max_a \sum_{s'} P(s'|s,a) V(s') $$
+This visualization demonstrates the core difference between pathfinding and policy-based planning:
 
--   **Insight:** The arrows don't just point to the goal; they point to the *safest* direction that makes progress.
--   **Visual:** Watch how the arrows "flow" like water around obstacles.
+### The Invisible Trap (Wind)
+Unlike Walls, **Wind is ignored during the pre-planning phase** for both algorithms. This creates a "Trap" scenario:
+-   The **A* Solver** chooses the direct line through the wind, assuming it can move perfectly. Once it hits the wind, it is blown off course and must constantly recalculate.
+-   The **MDP Solver** (in its current state) also plans through the wind but demonstrates how a global policy field allows for immediate correction even when pushed far from the "optimal" path.
 
-### A* (A-Star)
-Uses heuristic search ($f = g + h$) to find the shortest path.
--   **Insight:** Efficient but brittle. It generates a single path (highlighted) rather than a global policy.
+### Visual Representation
+-   **Policy Field (Cyan Arrows):** The "Brain" of the agent. Shows the intended direction for every cell.
+-   **Wind Vectors (Light Blue Pulsating Arrows):** The "Fluid" world. Shows the direction and force of physical displacement.
+-   **Heatmap:** Red to Green gradients represent the "Value" (proximity to goal/safety) of each cell.
 
 ## 📂 Project Structure
 
--   `src/GridSystem.ts`: The raw data layer (Walls, Wind, Empty).
--   `src/MdpSolver.ts`: Implements Value Iteration.
--   `src/AStarSolver.ts`: Implements A* Pathfinding.
--   `src/FlowRenderer.ts`: Visualizes the policy using Babylon.js Thin Instances (rendering 2500+ arrows efficiently).
--   `src/Agent.ts`: The rover that obeys the current policy.
+-   `src/GridSystem.ts`: Data layer for Walls, Goals, and Wind configurations.
+-   `src/MdpSolver.ts`: Implements Value Iteration (Bellman Equation).
+-   `src/AStarSolver.ts`: Implements A* Heuristic Search.
+-   `src/FlowRenderer.ts`: High-performance visualization of the policy field.
+-   `src/WindRenderer.ts`: Visualizes environmental forces with pulsating light-blue vectors.
+-   `src/Agent.ts`: The "Rover" that interacts with both the policy and the physics of the world.
 
 ## 🎨 Visual Style
-"Cyberpunk Lab" aesthetic:
--   Dark background.
--   Neon Cyan for Policy.
--   Neon Green for High Value / Goals.
--   Neon Red for Low Value / Wind.
+"Cyberpunk Lab" / "Neon" aesthetic:
+-   Dark background for high contrast.
+-   Neon Cyan for Policy / Intelligence.
+-   Neon Blue (Pulsating) for Environmental Forces.
+-   Neon Green for Goals and High-Value zones.

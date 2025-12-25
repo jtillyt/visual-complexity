@@ -7,7 +7,7 @@ import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
-import "@babylonjs/core/Culling/ray"; // Fix side-effect warning for picking
+import "@babylonjs/core/Culling/ray"; 
 
 import { GridSystem, CellType } from './GridSystem';
 import { GridRenderer } from './GridRenderer';
@@ -47,25 +47,25 @@ const createScene = () => {
 
     // --- Render Loop Logic ---
     scene.onBeforeRenderObservable.add(() => {
-        // Run solver iteration
-        // MDP needs continuous iteration to converge.
-        // A* technically only needs to run when grid/agent changes, but running it every frame 
-        // ensures immediate response to moving obstacles/agent and is cheap for this grid size.
         currentSolver.iterate(agent.position);
-        
-        // Update Visuals
         flowRenderer.updatePolicy(currentSolver.policy, currentSolver.getValues());
         agent.update(engine.getDeltaTime() / 1000, currentSolver);
     });
 
     // --- Camera Setup ---
-    // Center of grid is roughly (15, 0, 15)
     const cameraPosition = new Vector3(15, 50, 15);
     const camera = new FreeCamera("camera1", cameraPosition, scene);
     camera.mode = FreeCamera.ORTHOGRAPHIC_CAMERA;
-    camera.upVector = new Vector3(0, 0, 1); // Fix gimbal lock for top-down view
+    camera.upVector = new Vector3(0, 0, 1); 
     camera.setTarget(new Vector3(15, 0, 15));
     
+    // Default bounds (fallback)
+    const targetRadius = 18;
+    camera.orthoTop = targetRadius;
+    camera.orthoBottom = -targetRadius;
+    camera.orthoLeft = -targetRadius;
+    camera.orthoRight = targetRadius;
+
     // --- Resize Handling ---
     const updateCameraProjection = () => {
         engine.resize();
@@ -73,9 +73,7 @@ const createScene = () => {
         let width = canvasContainer ? canvasContainer.clientWidth : engine.getRenderWidth();
         let height = canvasContainer ? canvasContainer.clientHeight : engine.getRenderHeight();
         
-        if (width === 0) width = window.innerWidth;
-        if (height === 0) height = window.innerHeight - 180;
-        if (height === 0) height = 1;
+        if (width <= 0 || height <= 0 || isNaN(width) || isNaN(height)) return;
         
         const aspectRatio = width / height;
         const targetRadius = 18; 
@@ -97,14 +95,17 @@ const createScene = () => {
         new ResizeObserver(updateCameraProjection).observe(canvasContainer);
     }
     setTimeout(updateCameraProjection, 100);
+    window.addEventListener('resize', updateCameraProjection);
 
     // --- Lighting & Environment ---
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
     light.intensity = 0.7;
 
+    // Invisible Ground for Picking
     const ground = MeshBuilder.CreateGround("ground", { width: 30, height: 30 }, scene);
     ground.position = new Vector3(15, 0, 15);
     ground.visibility = 0; 
+    ground.isPickable = true;
 
     // --- Interaction State ---
     let isPainting = false;
@@ -139,14 +140,14 @@ const createScene = () => {
             const val = (e.target as HTMLSelectElement).value;
             if (val === 'mdp') {
                 currentSolver = mdpSolver;
-                currentSolver.reset(); // clear old state
+                currentSolver.reset(); 
             } else {
                 currentSolver = aStarSolver;
                 currentSolver.reset();
             }
         };
 
-        // 1.5 Wind Controls (Hidden by default, shown when Wind tool active)
+        // 1.5 Wind Controls
         const windControls = document.createElement('div');
         windControls.id = 'wind-controls';
         windControls.style.display = 'none';
@@ -205,7 +206,6 @@ const createScene = () => {
                     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     
-                    // Show/Hide Wind Controls
                     const wc = document.getElementById('wind-controls');
                     if (wc) wc.style.display = activeMode === 'wind' ? 'block' : 'none';
                 };
@@ -327,7 +327,6 @@ const createScene = () => {
             const type = getCellTypeFromMode(activeMode);
             const current = gridSystem.getCell(x, y);
             
-            // Allow painting Wind over Wind to update settings
             if (current !== type || type === CellType.Wind) {
                 gridSystem.setCell(x, y, type);
                 
@@ -340,10 +339,7 @@ const createScene = () => {
                 }
                 
                 gridRenderer.update();
-                windRenderer.updateWindData(); // Update wind visuals
-                // Reset solvers to ensure they react to new map
-                // (Though iterate runs every frame, resetting value map helps visualization flow)
-                // mdpSolver.reset(); // Optional, keeps momentum if commented out
+                windRenderer.updateWindData(); 
             }
         }
     };

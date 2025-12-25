@@ -61,7 +61,7 @@ export class WindRenderer {
         material.emissiveColor = new Color3(0.5, 0.8, 1.0); // Light Blue
         material.disableLighting = true;
         arrow.material = material;
-        // arrow.useVertexColors = true; // If we want per-instance alpha or variation
+        arrow.useVertexColors = true; 
         
         return arrow;
     }
