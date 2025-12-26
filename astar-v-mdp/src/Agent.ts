@@ -20,6 +20,8 @@ export class Agent {
     public position: Vector3;        // Actual world position
     public virtualPosition: Vector3; // "Mental" position (Where it thinks it is in A* mode)
     
+    public isStopped: boolean = false;
+    
     private speed: number = 8.0;
     private mode: 'astar' | 'mdp' = 'astar';
     
@@ -98,6 +100,8 @@ export class Agent {
     }
 
     public update(deltaTime: number, solver: Solver): void {
+        if (this.isStopped) return;
+
         // --- 1. Trail Logic ---
         const currentGridX = Math.floor(this.position.x);
         const currentGridZ = Math.floor(this.position.z);
@@ -118,8 +122,6 @@ export class Agent {
         const vGridZ = Math.floor(this.virtualPosition.z);
 
         if (!this.gridSystem.isValid(vGridX, vGridZ)) {
-            // Virtual agent went off grid? Stop virtual?
-            // Just return, real agent stops too
             return;
         }
 
@@ -140,7 +142,7 @@ export class Agent {
                  vxCommand = (dx / dist) * this.speed;
                  vzCommand = (dz / dist) * this.speed;
              }
-             // Else stop (command 0)
+             // Else stop virtually
         } else {
             // Policy
             const index = this.gridSystem.getFlatIndex(vGridX, vGridZ);
@@ -154,11 +156,27 @@ export class Agent {
         this.virtualPosition.z += vzCommand * deltaTime;
 
         // --- 5. Calculate Real Forces (Physics) ---
-        // Real movement = Command + Wind
-        // Wind is sampled at Real Position
         const rGridX = Math.floor(this.position.x);
         const rGridZ = Math.floor(this.position.z);
         
+        // Check Goal (Real) - Stop Simulation
+        if (this.gridSystem.isValid(rGridX, rGridZ) && this.gridSystem.getCell(rGridX, rGridZ) === CellType.Goal) {
+             const targetX = rGridX + 0.5;
+             const targetZ = rGridZ + 0.5;
+             const dx = targetX - this.position.x;
+             const dz = targetZ - this.position.z;
+             const dist = Math.sqrt(dx * dx + dz * dz);
+             
+             if (dist < 0.05) {
+                 this.position.x = targetX;
+                 this.position.z = targetZ;
+                 this.updateMeshPosition();
+                 this.updateTrail();
+                 this.isStopped = true; // STOP SIMULATION
+                 return; 
+             }
+        }
+
         const windVec = this.gridSystem.getWindVector(rGridX, rGridZ);
         let vxWind = 0;
         let vzWind = 0;
@@ -176,7 +194,7 @@ export class Agent {
         const totalVx = vxCommand + vxWind;
         const totalVz = vzCommand + vzWind;
 
-        // 5. Integrate & Collision (Sliding with Radius)
+        // 6. Integrate & Collision (Sliding with Radius)
         const radius = 0.35;
         const epsilon = 0.001;
         
@@ -184,29 +202,28 @@ export class Agent {
         let nextX = this.position.x + totalVx * deltaTime;
         let checkX = totalVx > 0 ? nextX + radius : nextX - radius;
         let gridXCheck = Math.floor(checkX);
-        let gridZCheck = Math.floor(this.position.z); // Check against current Z row
+        let gridZCheck = Math.floor(this.position.z);
         
         let colX = false;
         if (this.gridSystem.isValid(gridXCheck, gridZCheck)) {
             if (this.gridSystem.getCell(gridXCheck, gridZCheck) === CellType.Wall) {
                 colX = true;
             }
+        } else {
+            colX = true; // Hit Edge
         }
         
         if (colX) {
-            // Hit wall, clamp
-            if (totalVx > 0) {
-                nextX = gridXCheck - radius - epsilon;
-            } else {
-                nextX = gridXCheck + 1 + radius + epsilon;
-            }
+            if (totalVx > 0) nextX = gridXCheck - radius - epsilon;
+            else nextX = gridXCheck + 1 + radius + epsilon;
+            this.isStopped = true; // Hit Wall/Edge
         }
         this.position.x = nextX;
 
         // --- Z Axis ---
         let nextZ = this.position.z + totalVz * deltaTime;
         let checkZ = totalVz > 0 ? nextZ + radius : nextZ - radius;
-        gridXCheck = Math.floor(this.position.x); // Check against new X col
+        gridXCheck = Math.floor(this.position.x);
         gridZCheck = Math.floor(checkZ);
         
         let colZ = false;
@@ -214,15 +231,14 @@ export class Agent {
             if (this.gridSystem.getCell(gridXCheck, gridZCheck) === CellType.Wall) {
                 colZ = true;
             }
+        } else {
+            colZ = true; // Hit Edge
         }
         
         if (colZ) {
-            // Hit wall, clamp
-            if (totalVz > 0) {
-                nextZ = gridZCheck - radius - epsilon;
-            } else {
-                nextZ = gridZCheck + 1 + radius + epsilon;
-            }
+            if (totalVz > 0) nextZ = gridZCheck - radius - epsilon;
+            else nextZ = gridZCheck + 1 + radius + epsilon;
+            this.isStopped = true; // Hit Wall/Edge
         }
         this.position.z = nextZ;
 
@@ -268,8 +284,9 @@ export class Agent {
     public setPosition(x: number, y: number) {
         this.position.x = x + 0.5;
         this.position.z = y + 0.5;
-        this.virtualPosition.copyFrom(this.position); // Reset virtual
+        this.virtualPosition.copyFrom(this.position); 
         
+        this.isStopped = false;
         this.lastGridPos = { x, y };
         
         this.visitedPath = [this.position.clone()];

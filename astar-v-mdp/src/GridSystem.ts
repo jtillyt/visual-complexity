@@ -107,27 +107,103 @@ export class GridSystem {
                 const ty = sy + config.dy * k;
                 
                 if (this.isValid(tx, ty)) {
-                    // Check if blocked by Wall?
-                    // "Wind flows around obstacles" - maybe simplest is just ignore walls for now, 
-                    // or stop at wall. User didn't specify. 
-                    // Let's assume it passes through for now or stops at wall.
-                    // If we want "fluid" it should probably stop or flow around.
-                    // Simple projection is fine for this task.
-                    
-                    const tIdx = ty * this.width + tx;
-                    
-                    // Linear falloff: Force ... 1
-                    // Dist 1 -> Mag = Force
-                    // Dist Force -> Mag = 1
-                    // Formula: Force - k + 1
+                    // Linear falloff
                     const magnitude = Math.max(0, config.force - k + 1);
-                    
-                    // Add to field (Vector addition)
+                    const tIdx = ty * this.width + tx;
                     this.windField[tIdx * 2] += config.dx * magnitude;
                     this.windField[tIdx * 2 + 1] += config.dy * magnitude;
                 }
             }
         }
+    }
+
+    public serialize(agentX: number, agentY: number): string {
+        let output = "";
+        // Iterate Top-Down (Visual Layout)
+        for (let y = this.height - 1; y >= 0; y--) {
+            output += "|";
+            for (let x = 0; x < this.width; x++) {
+                const cell = this.getCell(x, y);
+                let symbol = " . "; // Default Empty
+
+                if (x === agentX && y === agentY) {
+                    symbol = " C ";
+                } else if (cell === CellType.Wall) {
+                    symbol = " B ";
+                } else if (cell === CellType.Goal) {
+                    symbol = " G ";
+                } else if (cell === CellType.Wind) {
+                    const w = this.getWindConfig(x, y);
+                    if (w) {
+                        let dir = "U";
+                        if (w.dx === 1) dir = "R";
+                        else if (w.dx === -1) dir = "L";
+                        else if (w.dy === -1) dir = "D";
+                        symbol = `W${dir}${w.force}`;
+                    } else {
+                        symbol = " W? "; // Error state
+                    }
+                }
+                
+                // Pad to 3 chars if length < 3
+                if (symbol.length < 3) symbol = " " + symbol + " ";
+                
+                output += symbol + "|";
+            }
+            output += "\n";
+        }
+        return output;
+    }
+
+    public deserialize(data: string): { agentX: number, agentY: number } | null {
+        this.reset();
+        let agentPos = null;
+
+        const lines = data.trim().split('\n');
+        // Parse Top-Down
+        // Expected height lines
+        
+        let y = this.height - 1;
+        for (const line of lines) {
+            if (y < 0) break;
+            
+            // Split by '|' and remove empty first/last
+            const tokens = line.split('|').map(t => t.trim()).filter(t => t !== "");
+            
+            for (let x = 0; x < this.width; x++) {
+                if (x >= tokens.length) break;
+                
+                const token = tokens[x];
+                
+                if (token === "C") {
+                    agentPos = { agentX: x, agentY: y };
+                    this.setCell(x, y, CellType.Empty); // Agent sits on empty
+                } else if (token === "B") {
+                    this.setCell(x, y, CellType.Wall);
+                } else if (token === "G") {
+                    this.setCell(x, y, CellType.Goal);
+                } else if (token === ".") {
+                    this.setCell(x, y, CellType.Empty);
+                } else if (token.startsWith("W")) {
+                    // Parse W[Dir][Force] e.g. WU2
+                    const dirChar = token.charAt(1);
+                    const forceChar = token.substring(2);
+                    const force = parseInt(forceChar) || 2;
+                    
+                    let dx = 0, dy = 0;
+                    if (dirChar === 'U') dy = 1;
+                    else if (dirChar === 'D') dy = -1;
+                    else if (dirChar === 'L') dx = -1;
+                    else if (dirChar === 'R') dx = 1;
+                    
+                    this.setCell(x, y, CellType.Wind);
+                    this.setWindConfig(x, y, dx, dy, force);
+                }
+            }
+            y--;
+        }
+        
+        return agentPos;
     }
 
     /**

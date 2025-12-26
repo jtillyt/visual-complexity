@@ -64,7 +64,17 @@ const createScene = () => {
         const values = currentSolver.getValues();
         flowRenderer.updatePolicy(currentSolver.policy, values, currentSolverType);
         gridRenderer.updateVisuals(values, currentSolverType);
-        agent.update(engine.getDeltaTime() / 1000, currentSolver);
+        
+        if (isSimulationRunning) {
+            agent.update(engine.getDeltaTime() / 1000, currentSolver);
+        }
+        
+        // Update Compass
+        const compass = document.getElementById('compass-container');
+        if (compass) {
+            const deg = (camera.alpha * 180 / Math.PI) + 90;
+            compass.style.transform = `rotate(${deg}deg)`;
+        }
     });
 
     // --- Camera Setup ---
@@ -114,13 +124,150 @@ const createScene = () => {
     // --- Interaction State ---
     let isPainting = false;
     let activeMode: 'wall' | 'wind' | 'goal' | 'erase' | 'agent' | 'inspect' = 'inspect';
+    let isSimulationRunning = false;
+    let agentStartPos = { x: 0, y: 0 };
 
     // --- UI Construction ---
     const setupUI = () => {
+        const mainLayout = document.getElementById('main-layout');
         const toolsSection = document.getElementById('tools-section');
         const buttonsContainer = document.getElementById('tool-buttons');
         
-        if (!toolsSection || !buttonsContainer) return;
+        if (!toolsSection || !buttonsContainer || !mainLayout) return;
+
+        // --- Top Bar (Play/Stop & Compass) ---
+        const topBar = document.createElement('div');
+        topBar.style.position = 'absolute';
+        topBar.style.top = '0';
+        topBar.style.left = '0';
+        topBar.style.width = '100%';
+        topBar.style.height = '60px';
+        topBar.style.display = 'flex';
+        topBar.style.justifyContent = 'space-between';
+        topBar.style.alignItems = 'center';
+        topBar.style.padding = '0 20px';
+        topBar.style.boxSizing = 'border-box';
+        topBar.style.pointerEvents = 'none'; // Let clicks pass through to canvas
+        topBar.style.zIndex = '10';
+        
+        // Play Button
+        const playBtn = document.createElement('button');
+        playBtn.textContent = '▶ RUN SIMULATION';
+        playBtn.style.pointerEvents = 'auto';
+        playBtn.style.background = 'rgba(0, 20, 40, 0.8)';
+        playBtn.style.border = '2px solid #0f0';
+        playBtn.style.color = '#0f0';
+        playBtn.style.padding = '10px 20px';
+        playBtn.style.fontFamily = 'monospace';
+        playBtn.style.fontSize = '16px';
+        playBtn.style.cursor = 'pointer';
+        playBtn.style.fontWeight = 'bold';
+        
+        playBtn.onclick = () => {
+            isSimulationRunning = !isSimulationRunning;
+            if (isSimulationRunning) {
+                playBtn.textContent = '⏹ STOP / RESET';
+                playBtn.style.borderColor = '#f00';
+                playBtn.style.color = '#f00';
+                // Store start pos
+                agentStartPos = { x: Math.floor(agent.position.x), y: Math.floor(agent.position.z) };
+            } else {
+                playBtn.textContent = '▶ RUN SIMULATION';
+                playBtn.style.borderColor = '#0f0';
+                playBtn.style.color = '#0f0';
+                // Reset Agent
+                agent.setPosition(agentStartPos.x, agentStartPos.y);
+                currentSolver.reset(); // Reset solver state (visited nodes etc)
+            }
+        };
+        topBar.appendChild(playBtn);
+
+        // Compass
+        const compass = document.createElement('div');
+        compass.id = 'compass-container';
+        compass.style.width = '80px';
+        compass.style.height = '80px';
+        compass.style.position = 'relative';
+        compass.style.borderRadius = '50%';
+        compass.style.border = '2px solid cyan';
+        compass.style.background = 'rgba(0, 20, 40, 0.8)';
+        compass.style.boxShadow = '0 0 10px cyan';
+        compass.style.marginRight = '20px'; // Offset from edge
+
+        const labelStyle = 'position: absolute; color: cyan; font-family: monospace; font-weight: bold; font-size: 12px;';
+        compass.innerHTML = `
+            <div style="${labelStyle} top: 5px; left: 50%; transform: translateX(-50%);">N</div>
+            <div style="${labelStyle} bottom: 5px; left: 50%; transform: translateX(-50%);">S</div>
+            <div style="${labelStyle} left: 5px; top: 50%; transform: translateY(-50%);">W</div>
+            <div style="${labelStyle} right: 5px; top: 50%; transform: translateY(-50%);">E</div>
+            <div style="position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: cyan; transform: translate(-50%, -50%); border-radius: 50%;"></div>
+        `;
+        topBar.appendChild(compass);
+
+        mainLayout.appendChild(topBar);
+
+        // --- Save / Load Buttons ---
+        const ioDiv = document.createElement('div');
+        ioDiv.style.display = 'flex';
+        ioDiv.style.gap = '5px';
+        ioDiv.style.marginTop = '10px';
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = '💾 Save';
+        saveBtn.className = 'mode-btn';
+        saveBtn.onclick = () => {
+            const ax = Math.floor(agent.position.x);
+            const ay = Math.floor(agent.position.z);
+            const data = gridSystem.serialize(ax, ay);
+            const blob = new Blob([data], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'grid_scenario.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+        
+        const loadBtn = document.createElement('button');
+        loadBtn.textContent = '📂 Load';
+        loadBtn.className = 'mode-btn';
+        loadBtn.onclick = () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.txt';
+            input.onchange = (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const text = evt.target?.result as string;
+                    if (text) {
+                        const startPos = gridSystem.deserialize(text);
+                        // Refresh Visuals
+                        gridRenderer.update();
+                        windRenderer.updateWindData(); // Re-read grid
+                        // Technically WindRenderer reads live in animate, but if it optimized? 
+                        // It reads live.
+                        
+                        if (startPos) {
+                            agent.setPosition(startPos.agentX, startPos.agentY);
+                            agentStartPos = { x: startPos.agentX, y: startPos.agentY };
+                        }
+                        
+                        // Stop simulation if running
+                        if (isSimulationRunning) {
+                            playBtn.click(); // Toggle off
+                        }
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        };
+        
+        ioDiv.appendChild(saveBtn);
+        ioDiv.appendChild(loadBtn);
+        toolsSection.appendChild(ioDiv);
 
         // 1. Solver Switcher
         const solverDiv = document.createElement('div');
