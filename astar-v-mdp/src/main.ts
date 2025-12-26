@@ -55,8 +55,8 @@ const createScene = () => {
     // --- Solvers ---
     const mdpSolver = new MdpSolver(gridSystem);
     const aStarSolver = new AStarSolver(gridSystem);
-    let currentSolver: Solver = mdpSolver; // Default to MDP
-    let currentSolverType: 'mdp' | 'astar' = 'mdp';
+    let currentSolver: Solver = aStarSolver; // Default to A*
+    let currentSolverType: 'mdp' | 'astar' = 'astar';
 
     // --- Render Loop Logic ---
     scene.onBeforeRenderObservable.add(() => {
@@ -71,7 +71,7 @@ const createScene = () => {
     const center = new Vector3(15, 0, 15);
     
     // Single Orbit Camera
-    const camera = new ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 3, 40, center, scene);
+    const camera = new ArcRotateCamera("camera", -Math.PI / 4, Math.PI / 4, 40, center, scene);
     camera.lowerRadiusLimit = 10;
     camera.upperRadiusLimit = 100;
     camera.attachControl(canvas, true);
@@ -79,17 +79,17 @@ const createScene = () => {
     const setCameraView = (mode: 'top' | 'iso') => {
         if (mode === 'top') {
             // Top-down view
-            camera.beta = 0.01; // Avoid 0 to prevent gimbal lock issues
+            camera.beta = 0.01; 
             camera.alpha = -Math.PI / 2;
         } else {
-            // Isometric view
-            camera.beta = Math.PI / 3;
-            camera.alpha = -Math.PI / 2;
+            // Isometric view (Corner 45 deg)
+            camera.beta = Math.PI / 4;
+            camera.alpha = -Math.PI / 4;
         }
     };
     
-    // Initialize Iso
-    setCameraView('iso');
+    // Initialize Iso (Camera is already init to this, but consistent fn call)
+    // setCameraView('iso'); 
 
     // --- Resize Handling ---
     const updateCameraProjection = () => {
@@ -99,12 +99,6 @@ const createScene = () => {
     if (canvasContainer) {
         new ResizeObserver(updateCameraProjection).observe(canvasContainer);
     }
-    window.addEventListener('resize', updateCameraProjection);
-    
-    if (canvasContainer) {
-        new ResizeObserver(updateCameraProjection).observe(canvasContainer);
-    }
-    setTimeout(updateCameraProjection, 100);
     window.addEventListener('resize', updateCameraProjection);
 
     // --- Lighting & Environment ---
@@ -139,16 +133,16 @@ const createScene = () => {
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <label style="color: white; font-family: monospace;">Algorithm:</label>
                 <select id="solver-select" style="background: #333; color: cyan; border: 1px solid cyan; padding: 2px;">
+                    <option value="astar" selected>A* (Deterministic)</option>
                     <option value="mdp">MDP (Probabilistic)</option>
-                    <option value="astar">A* (Deterministic)</option>
                 </select>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <label style="color: white; font-family: monospace;">View:</label>
-                <select id="view-select" style="background: #333; color: lime; border: 1px solid lime; padding: 2px;">
-                    <option value="iso">Angled View</option>
-                    <option value="top">Top View</option>
-                </select>
+                <div style="display: flex; gap: 5px;">
+                    <button id="btn-view-iso" style="background: #333; color: lime; border: 1px solid lime; cursor: pointer; padding: 2px 6px;">Angled</button>
+                    <button id="btn-view-top" style="background: #333; color: lime; border: 1px solid lime; cursor: pointer; padding: 2px 6px;">Top</button>
+                </div>
             </div>
         `;
         
@@ -169,11 +163,11 @@ const createScene = () => {
             }
         };
 
-        const viewSelect = document.getElementById('view-select') as HTMLSelectElement;
-        viewSelect.onchange = (e) => {
-            const val = (e.target as HTMLSelectElement).value as 'top' | 'iso';
-            setCameraView(val);
-        };
+        const btnIso = document.getElementById('btn-view-iso') as HTMLButtonElement;
+        const btnTop = document.getElementById('btn-view-top') as HTMLButtonElement;
+        
+        btnIso.onclick = () => setCameraView('iso');
+        btnTop.onclick = () => setCameraView('top');
 
         // 1.5 Wind Controls
         const windControls = document.createElement('div');

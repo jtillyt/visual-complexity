@@ -6,133 +6,141 @@ import { Matrix, Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import "@babylonjs/core/Meshes/thinInstanceMesh"; 
 
 /**
- * GridRenderer handles the visualization of the static grid cells (Floor, Walls, Goal).
- * Supports "Holographic Table" aesthetic with glowing paths and floating tiles.
+ * GridRenderer handles the visualization of the grid.
+ * - Floor: Holographic, floating tiles.
+ * - Walls: Solid, brick-textured blocks.
  */
 export class GridRenderer {
     private gridSystem: GridSystem;
     private scene: Scene;
-    private tileMesh: Mesh;
-    private colorsData: Float32Array;
-    private matricesData: Float32Array;
+    
+    private floorMesh: Mesh;
+    private wallMesh: Mesh;
+    
+    // Buffers
+    private matricesFloor: Float32Array;
+    private colorsFloor: Float32Array;
+    
+    private matricesWall: Float32Array;
 
     constructor(gridSystem: GridSystem, scene: Scene) {
         this.gridSystem = gridSystem;
         this.scene = scene;
-        this.colorsData = new Float32Array(gridSystem.width * gridSystem.height * 4);
-        this.matricesData = new Float32Array(gridSystem.width * gridSystem.height * 16);
         
-        this.tileMesh = this.createTileMesh();
+        const count = gridSystem.width * gridSystem.height;
+        this.matricesFloor = new Float32Array(count * 16);
+        this.colorsFloor = new Float32Array(count * 4);
+        this.matricesWall = new Float32Array(count * 16);
         
-        // Initial full update
+        this.floorMesh = this.createFloorMesh();
+        this.wallMesh = this.createWallMesh();
+        
         this.update(); 
     }
 
-    private createTileMesh(): Mesh {
-        // Create a Box. Default size 1 centered at origin.
-        const tile = MeshBuilder.CreateBox("tile", { size: 1.0 }, this.scene);
+    private createFloorMesh(): Mesh {
+        const tile = MeshBuilder.CreateBox("floorTile", { size: 1.0 }, this.scene);
         tile.useVertexColors = true; 
         
-        const material = new StandardMaterial("tileMat", this.scene);
+        const material = new StandardMaterial("floorMat", this.scene);
         
-        // Create Holographic Border Texture
+        // Holographic Border Texture
         const texture = new DynamicTexture("gridTex", { width: 128, height: 128 }, this.scene, false);
         texture.hasAlpha = true;
         const ctx = texture.getContext();
-        
-        // Clear (Transparent)
         ctx.clearRect(0, 0, 128, 128);
-        
-        // Draw Border
         ctx.strokeStyle = "white";
         ctx.lineWidth = 15;
         ctx.strokeRect(0, 0, 128, 128);
-        
-        // Optional: Fill center with very faint white for "glass" effect?
-        // ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
-        // ctx.fillRect(0, 0, 128, 128);
-        
         texture.update();
+        texture.updateSamplingMode(Texture.TRILINEAR_SAMPLINGMODE);
+        texture.anisotropicFilteringLevel = 4;
 
-        // Apply Texture
         material.emissiveTexture = texture;
         material.opacityTexture = texture;
         material.diffuseColor = Color3.Black();
         material.disableLighting = true; 
-        
-        // Use Vertex Colors to tint the Emissive Texture
-        // StandardMaterial multiplies EmissiveTexture * VertexColor if useVertexColors is true?
-        // Actually, for Emissive to be tinted by vertex color, we might need to rely on the fact that
-        // EmissiveColor is usually added.
-        // Let's set EmissiveColor to White (default multiplier) and let texture define pattern.
-        // Vertex Color usually tints Diffuse. For Emissive, we might need a custom shader or 
-        // rely on standard behavior.
-        // Babylon StandardMaterial: VertexColor multiplies Diffuse. 
-        // Does it multiply Emissive? 
-        // In newer versions yes if `useEmissiveAsIllumination`?
-        // Let's try simple setup: EmissiveColor = White.
-        // If Vertex Color doesn't tint emissive texture, everything will be white borders.
-        // We might need to map Vertex Color to Emissive Color manually in shader or use PBR.
-        // BUT: StandardMaterial VertexColor affects the final output.
+        material.backFaceCulling = false; 
         material.emissiveColor = Color3.White(); 
 
         tile.material = material;
-        
-        // Ensure bounding box covers all instances
         tile.alwaysSelectAsActiveMesh = true;
         tile.isPickable = false;
 
         return tile;
     }
 
-    /**
-     * Rebuilds geometry (matrices) and resets base colors.
-     * Call this when grid structure changes (Paint).
-     */
+    private createWallMesh(): Mesh {
+        const wall = MeshBuilder.CreateBox("wallBlock", { size: 1.0 }, this.scene);
+        
+        const material = new StandardMaterial("wallMat", this.scene);
+        
+        // Light Cyberpunk Blue Color
+        material.emissiveColor = new Color3(0.3, 0.6, 1.0);
+        material.disableLighting = true; 
+        
+        wall.material = material;
+        wall.alwaysSelectAsActiveMesh = true;
+        wall.isPickable = false;
+        
+        return wall;
+    }
+
     public update(): void {
         const width = this.gridSystem.width;
         const height = this.gridSystem.height;
+        
+        // Reusable objects
+        const zeroMatrix = Matrix.Compose(Vector3.Zero(), Quaternion.Identity(), Vector3.Zero());
         
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const index = y * width + x;
                 const type = this.gridSystem.getCell(x, y);
                 
-                // 1. Update Matrix (Scale & Position)
                 const worldX = x + 0.5;
                 const worldZ = y + 0.5;
-                let scaleY = 0.1; // Floor thickness
-                let posY = 0.05;  
 
                 if (type === CellType.Wall) {
-                    scaleY = 1.0; // Wall height
-                    posY = 0.5;   
+                    // It's a Wall
+                    const matrix = Matrix.Compose(
+                        new Vector3(1.0, 1.0, 1.0), // Full block
+                        Quaternion.Identity(),
+                        new Vector3(worldX, 0.5, worldZ)
+                    );
+                    matrix.copyToArray(this.matricesWall, index * 16);
+                    
+                    // Hide Floor
+                    zeroMatrix.copyToArray(this.matricesFloor, index * 16);
+                    
+                } else {
+                    // It's Floor/Wind/Goal
+                    const matrix = Matrix.Compose(
+                        new Vector3(0.95, 0.1, 0.95), // Floating tile
+                        Quaternion.Identity(),
+                        new Vector3(worldX, 0.05, worldZ)
+                    );
+                    matrix.copyToArray(this.matricesFloor, index * 16);
+                    
+                    // Hide Wall
+                    zeroMatrix.copyToArray(this.matricesWall, index * 16);
                 }
-
-                const matrix = Matrix.Compose(
-                    new Vector3(0.95, scaleY, 0.95), // Small gap
-                    Quaternion.Identity(),
-                    new Vector3(worldX, posY, worldZ)
-                );
                 
-                matrix.copyToArray(this.matricesData, index * 16);
-                
-                // Set default color
-                this.setColor(index, type, 0, 'mdp');
+                // Initialize floor color (Wall has no vertex color)
+                this.setFloorColor(index, type, 0, 'mdp');
             }
         }
         
-        this.tileMesh.thinInstanceSetBuffer("matrix", this.matricesData, 16, false);
-        this.tileMesh.thinInstanceSetBuffer("color", this.colorsData, 4, false);
+        this.floorMesh.thinInstanceSetBuffer("matrix", this.matricesFloor, 16, false);
+        this.floorMesh.thinInstanceSetBuffer("color", this.colorsFloor, 4, false);
+        
+        this.wallMesh.thinInstanceSetBuffer("matrix", this.matricesWall, 16, false);
     }
 
-    /**
-     * Updates only the colors based on solver values (Path highlighting).
-     * Call this in the render loop.
-     */
     public updateVisuals(values: Float32Array, mode: 'astar' | 'mdp'): void {
          const width = this.gridSystem.width;
          const height = this.gridSystem.height;
@@ -142,18 +150,21 @@ export class GridRenderer {
              const y = Math.floor(i / width);
              const type = this.gridSystem.getCell(x, y);
              
-             this.setColor(i, type, values[i], mode);
+             // Only update floor colors. Walls are static.
+             if (type !== CellType.Wall) {
+                 this.setFloorColor(i, type, values[i], mode);
+             }
          }
          
-         this.tileMesh.thinInstanceBufferUpdated("color");
+         this.floorMesh.thinInstanceBufferUpdated("color");
     }
 
-    private setColor(index: number, type: CellType, value: number, mode: 'astar' | 'mdp'): void {
+    private setFloorColor(index: number, type: CellType, value: number, mode: 'astar' | 'mdp'): void {
         let r=0, g=0, b=0, a=1;
 
         switch (type) {
             case CellType.Wall:
-                r = 0.1; g = 0.1; b = 0.15; // Dark Metal
+                // Should not happen here, but safety
                 break;
             case CellType.Wind:
                 r = 0.0; g = 0.6; b = 1.0; // Neon Blue
@@ -171,19 +182,20 @@ export class GridRenderer {
                         // Visited
                         r = 0.0; g = 0.3; b = 0.2; 
                     } else {
-                        // Unvisited - Default Light Blue Grid (Subtle)
+                        // Unvisited
                         r = 0.05; g = 0.15; b = 0.25; 
                     }
                 } else {
-                    // MDP Mode - Default Light Blue Grid (Subtle)
+                    // MDP Mode
                     r = 0.05; g = 0.15; b = 0.25;
                 }
                 break;
         }
 
-        this.colorsData[index * 4 + 0] = r;
-        this.colorsData[index * 4 + 1] = g;
-        this.colorsData[index * 4 + 2] = b;
-        this.colorsData[index * 4 + 3] = a;
+        this.colorsFloor[index * 4 + 0] = r;
+        this.colorsFloor[index * 4 + 1] = g;
+        this.colorsFloor[index * 4 + 2] = b;
+        this.colorsFloor[index * 4 + 3] = a;
     }
 }
+
