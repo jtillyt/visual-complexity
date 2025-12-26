@@ -4,7 +4,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Matrix, Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { GridSystem } from './GridSystem';
+import { GridSystem, CellType } from './GridSystem';
 import "@babylonjs/core/Meshes/thinInstanceMesh";
 
 /**
@@ -24,6 +24,9 @@ export class FlowRenderer {
     private currentAngles: Float32Array;
     private targetAngles: Float32Array;
     
+    // Visibility Scale (0 or 1)
+    private scales: Float32Array;
+    
     private colors: Float32Array; // Added for value visualization
 
     private lerpSpeed: number = 0.1;
@@ -36,6 +39,7 @@ export class FlowRenderer {
         this.matrices = new Float32Array(this.numInstances * 16);
         this.currentAngles = new Float32Array(this.numInstances);
         this.targetAngles = new Float32Array(this.numInstances);
+        this.scales = new Float32Array(this.numInstances).fill(1);
         this.colors = new Float32Array(this.numInstances * 4); // RGBA
         
         this.arrowMesh = this.createArrowMesh();
@@ -79,9 +83,8 @@ export class FlowRenderer {
                 const worldX = x + 0.5;
                 const worldZ = y + 0.5;
                 
-                // Start with random directions for testing
-                this.currentAngles[index] = Math.random() * Math.PI * 2;
-                this.targetAngles[index] = this.currentAngles[index];
+                this.currentAngles[index] = 0;
+                this.targetAngles[index] = 0;
                 
                 // Default color (Cyan)
                 this.colors[index * 4 + 0] = 0;
@@ -89,7 +92,7 @@ export class FlowRenderer {
                 this.colors[index * 4 + 2] = 1;
                 this.colors[index * 4 + 3] = 1;
 
-                this.updateMatrix(index, worldX, worldZ, this.currentAngles[index]);
+                this.updateMatrix(index, worldX, worldZ, 0, 1);
             }
         }
         
@@ -97,10 +100,10 @@ export class FlowRenderer {
         this.arrowMesh.thinInstanceSetBuffer("color", this.colors, 4, false);
     }
 
-    private updateMatrix(index: number, x: number, z: number, angle: number): void {
+    private updateMatrix(index: number, x: number, z: number, angle: number, scale: number): void {
         const rotation = Quaternion.RotationAxis(Vector3.Up(), -angle); // Negate angle to match grid coordinates
         const matrix = Matrix.Compose(
-            new Vector3(1, 1, 1),
+            new Vector3(scale, scale, scale),
             rotation,
             new Vector3(x, 0.1, z) // Slightly above grid
         );
@@ -122,11 +125,16 @@ export class FlowRenderer {
             while (diff > Math.PI) diff -= Math.PI * 2;
             while (diff < -Math.PI) diff += Math.PI * 2;
 
-            if (Math.abs(diff) > 0.001) {
+            const scale = this.scales[i];
+
+            // If scale is 0, we force an update once to hide it.
+            // Ideally we track dirty state, but checking scale > 0 covers visible ones.
+            // We just update if diff > epsilon or if scale is involved.
+            if (Math.abs(diff) > 0.001 || scale > 0) {
                 this.currentAngles[i] += diff * this.lerpSpeed;
                 const x = i % width + 0.5;
                 const z = Math.floor(i / width) + 0.5;
-                this.updateMatrix(i, x, z, this.currentAngles[i]);
+                this.updateMatrix(i, x, z, this.currentAngles[i], scale);
                 changed = true;
             }
         }
@@ -140,8 +148,9 @@ export class FlowRenderer {
      * Update target directions and colors for the arrows based on value.
      * @param directions Array of angles in radians
      * @param values Array of value estimates
+     * @param mode Solver mode to determine filtering
      */
-    public updatePolicy(directions: Float32Array, values: Float32Array): void {
+    public updatePolicy(directions: Float32Array, values: Float32Array, mode: 'astar' | 'mdp'): void {
         if (directions.length !== this.numInstances) return;
         this.targetAngles.set(directions);
 
@@ -156,13 +165,37 @@ export class FlowRenderer {
         const range = maxVal - minVal || 1;
 
         for (let i = 0; i < this.numInstances; i++) {
+            const x = i % this.gridSystem.width;
+            const y = Math.floor(i / this.gridSystem.width);
+            const cellType = this.gridSystem.getCell(x, y);
+
+            // --- Visibility Logic ---
+            let isVisible = true;
+            
+            // 1. Hard Rules (Never show on obstacles/hazards)
+            if (cellType === CellType.Wall || cellType === CellType.Goal || cellType === CellType.Wind) {
+                isVisible = false;
+            } else {
+                // 2. Mode Rules
+                if (mode === 'astar') {
+                    // Only show on path (Value ~= 1.0)
+                    if (values[i] < 0.9) isVisible = false;
+                }
+                // MDP shows all remaining Empty cells
+            }
+
+            this.scales[i] = isVisible ? 1 : 0;
+            
+            // Force update matrix if we're hiding it now to ensure it disappears instantly
+            if (!isVisible) {
+                 const x = i % this.gridSystem.width + 0.5;
+                 const z = Math.floor(i / this.gridSystem.width) + 0.5;
+                 this.updateMatrix(i, x, z, this.currentAngles[i], 0);
+            }
+
+            // --- Color Logic ---
             const val = values[i];
             const t = (val - minVal) / range; // 0 to 1
-            
-            // Red (Low) -> Green (High)
-            // Low (0): 1, 0, 0
-            // High (1): 0, 1, 0
-            // Mid (0.5): 1, 1, 0 (Yellow)
             
             const r = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
             const g = t > 0.5 ? 1 : t * 2;
@@ -175,5 +208,6 @@ export class FlowRenderer {
         }
         
         this.arrowMesh.thinInstanceBufferUpdated("color");
+        this.arrowMesh.thinInstanceBufferUpdated("matrix"); // Force update for visibility changes
     }
 }

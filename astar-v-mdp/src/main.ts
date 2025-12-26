@@ -52,11 +52,12 @@ const createScene = () => {
     const mdpSolver = new MdpSolver(gridSystem);
     const aStarSolver = new AStarSolver(gridSystem);
     let currentSolver: Solver = mdpSolver; // Default to MDP
+    let currentSolverType: 'mdp' | 'astar' = 'mdp';
 
     // --- Render Loop Logic ---
     scene.onBeforeRenderObservable.add(() => {
         currentSolver.iterate(agent.position);
-        flowRenderer.updatePolicy(currentSolver.policy, currentSolver.getValues());
+        flowRenderer.updatePolicy(currentSolver.policy, currentSolver.getValues(), currentSolverType);
         agent.update(engine.getDeltaTime() / 1000, currentSolver);
     });
 
@@ -181,9 +182,11 @@ const createScene = () => {
             const val = (e.target as HTMLSelectElement).value;
             if (val === 'mdp') {
                 currentSolver = mdpSolver;
+                currentSolverType = 'mdp';
                 currentSolver.reset(); 
             } else {
                 currentSolver = aStarSolver;
+                currentSolverType = 'astar';
                 currentSolver.reset();
             }
         };
