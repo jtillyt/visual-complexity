@@ -428,6 +428,66 @@ const createScene = () => {
             }
         };
 
+        // --- Scenario Switcher ---
+        const scenarioDiv = document.createElement('div');
+        scenarioDiv.className = 'solver-switch';
+        scenarioDiv.style.marginBottom = '5px';
+        scenarioDiv.style.display = 'flex';
+        scenarioDiv.style.justifyContent = 'space-between';
+        scenarioDiv.style.alignItems = 'center';
+        scenarioDiv.innerHTML = `
+             <label style="color: white; font-family: monospace;">Scenario:</label>
+             <select id="scenario-select" style="background: #333; color: cyan; border: 1px solid cyan; padding: 2px;">
+                 <option value="" selected disabled>Select...</option>
+                 <option value="01_20_straight_no_wall_no_fan">Straight (Empty)</option>
+                 <option value="02_20_straight_wall_no_fan">Straight (Wall)</option>
+                 <option value="03_20_straight_wall_fan">Straight (Wind)</option>
+             </select>
+        `;
+        toolsSection.insertBefore(scenarioDiv, buttonsContainer);
+
+        const scenarioSelect = document.getElementById('scenario-select') as HTMLSelectElement;
+        scenarioSelect.onchange = async (e) => {
+            const filename = (e.target as HTMLSelectElement).value;
+            if (filename) {
+                try {
+                    const response = await fetch(`scenarios/${filename}.txt`);
+                    if (!response.ok) throw new Error("Failed to load scenario");
+                    const text = await response.text();
+                    
+                    // Logic reused from Load Button (Deduplicate later if strict)
+                    const lines = text.trim().split('\n');
+                    const h = lines.length;
+                    const firstLine = lines[0];
+                    const w = firstLine.split('|').length - 2;
+
+                    if (w > 0 && h > 0) {
+                         if (isSimulationRunning) playBtn.click();
+                         initializeGame(w, h);
+                         
+                         // Update Grid Size Dropdown
+                         if (gridSizeSelect) {
+                             const sizeStr = `${w}x${h}`;
+                             const option = Array.from(gridSizeSelect.options).find(o => o.value === sizeStr);
+                             gridSizeSelect.value = option ? sizeStr : "";
+                         }
+
+                         const startPos = gridSystem.deserialize(text);
+                         gridRenderer.update();
+                         windRenderer.updateWindData(); 
+                         
+                         if (startPos) {
+                             agent.setPosition(startPos.agentX, startPos.agentY);
+                             agentStartPos = { x: startPos.agentX, y: startPos.agentY };
+                         }
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert("Could not load scenario file.");
+                }
+            }
+        };
+
         // 1. Solver Switcher
         const solverDiv = document.createElement('div');
         solverDiv.className = 'solver-switch';
