@@ -60,13 +60,25 @@ const createScene = () => {
 
     // --- Render Loop Logic ---
     scene.onBeforeRenderObservable.add(() => {
-        currentSolver.iterate(agent.position);
+        // Only recalculate path if stopped (Create Mode) OR if using MDP (Probabilistic)
+        if (!isSimulationRunning || currentSolverType === 'mdp') {
+            currentSolver.iterate(currentSolverType === 'astar' ? agent.virtualPosition : agent.position);
+        }
+        
         const values = currentSolver.getValues();
         flowRenderer.updatePolicy(currentSolver.policy, values, currentSolverType);
         gridRenderer.updateVisuals(values, currentSolverType);
         
         if (isSimulationRunning) {
             agent.update(engine.getDeltaTime() / 1000, currentSolver);
+            
+            // Check if agent stopped (Collision/Goal/Edge)
+            if (agent.isStopped) {
+                const stopBtn = document.getElementById('btn-play-simulation');
+                if (stopBtn && isSimulationRunning) {
+                    stopBtn.click(); // Trigger the stop logic
+                }
+            }
         }
         
         // Update Compass
@@ -152,6 +164,7 @@ const createScene = () => {
         
         // Play Button
         const playBtn = document.createElement('button');
+        playBtn.id = 'btn-play-simulation';
         playBtn.textContent = '▶ RUN SIMULATION';
         playBtn.style.pointerEvents = 'auto';
         playBtn.style.background = 'rgba(0, 20, 40, 0.8)';
@@ -171,6 +184,7 @@ const createScene = () => {
                 playBtn.style.color = '#f00';
                 // Store start pos
                 agentStartPos = { x: Math.floor(agent.position.x), y: Math.floor(agent.position.z) };
+                agent.setMode(currentSolverType);
             } else {
                 playBtn.textContent = '▶ RUN SIMULATION';
                 playBtn.style.borderColor = '#0f0';
@@ -308,6 +322,7 @@ const createScene = () => {
                 currentSolverType = 'astar';
                 currentSolver.reset();
             }
+            agent.setMode(currentSolverType);
         };
 
         const btnIso = document.getElementById('btn-view-iso') as HTMLButtonElement;
