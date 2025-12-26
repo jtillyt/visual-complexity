@@ -15,8 +15,13 @@ export class Agent {
     private mesh: Mesh;
     public gridSystem: GridSystem;
     private scene: Scene;
-    public position: Vector3;
+    
+    // Positions
+    public position: Vector3;        // Actual world position
+    public virtualPosition: Vector3; // "Mental" position (Where it thinks it is in A* mode)
+    
     private speed: number = 8.0;
+    private mode: 'astar' | 'mdp' = 'astar';
     
     // Trail
     private visitedPath: Vector3[] = [];
@@ -27,6 +32,8 @@ export class Agent {
         this.gridSystem = gridSystem;
         this.scene = scene;
         this.position = new Vector3(startX + 0.5, 0.2, startY + 0.5); 
+        this.virtualPosition = this.position.clone();
+        
         this.lastGridPos = { x: startX, y: startY };
         this.visitedPath.push(this.position.clone());
 
@@ -34,14 +41,22 @@ export class Agent {
         this.updateMeshPosition();
     }
 
+    public setMode(mode: 'astar' | 'mdp') {
+        this.mode = mode;
+        // If switching to MDP, sync virtual to real immediately
+        if (mode === 'mdp') {
+            this.virtualPosition.copyFrom(this.position);
+        }
+    }
+
     private createMesh(): Mesh {
         // --- Materials ---
         const bodyMat = new StandardMaterial("bodyMat", this.scene);
-        bodyMat.diffuseColor = new Color3(0.1, 0.1, 0.1); // Black Body
+        bodyMat.diffuseColor = new Color3(0.1, 0.1, 0.1); 
         bodyMat.specularColor = new Color3(0.5, 0.5, 0.5);
         
         const glowMat = new StandardMaterial("glowMat", this.scene);
-        glowMat.emissiveColor = new Color3(0.0, 1.0, 1.0); // Cyan Glow
+        glowMat.emissiveColor = new Color3(0.0, 1.0, 1.0); 
         glowMat.disableLighting = true;
 
         // --- Geometry ---
@@ -50,22 +65,22 @@ export class Agent {
         body.position.y = 0.2;
         body.material = bodyMat;
 
-        // 2. Wheels (Glowing Rings) - Larger diameter
+        // 2. Wheels (Glowing Rings)
         const wheelOptions = { diameter: 0.4, thickness: 0.08, tessellation: 32 };
         
         const rearWheel = MeshBuilder.CreateTorus("rearWheel", wheelOptions, this.scene);
         rearWheel.rotation.y = Math.PI / 2; 
-        rearWheel.position.z = -0.3; // Adjusted for 0.75 depth
+        rearWheel.position.z = -0.3; 
         rearWheel.position.y = 0.2;
         rearWheel.material = glowMat;
 
         const frontWheel = MeshBuilder.CreateTorus("frontWheel", wheelOptions, this.scene);
         frontWheel.rotation.y = Math.PI / 2;
-        frontWheel.position.z = 0.3; // Adjusted for 0.75 depth
+        frontWheel.position.z = 0.3; 
         frontWheel.position.y = 0.2;
         frontWheel.material = glowMat;
         
-        // 3. Light Strips (Side)
+        // 3. Light Strips
         const stripLeft = MeshBuilder.CreateBox("stripL", { width: 0.03, height: 0.03, depth: 0.5 }, this.scene);
         stripLeft.position.x = -0.2;
         stripLeft.position.y = 0.2;
@@ -76,7 +91,6 @@ export class Agent {
         stripRight.position.y = 0.2;
         stripRight.material = glowMat;
 
-        // Merge all into one mesh
         const vehicle = Mesh.MergeMeshes([body, rearWheel, frontWheel, stripLeft, stripRight], true, true, undefined, false, true)!;
         vehicle.name = "agentCycle";
         
@@ -84,87 +98,139 @@ export class Agent {
     }
 
     public update(deltaTime: number, solver: Solver): void {
-        // 1. Get current grid cell
-        const gridX = Math.floor(this.position.x);
-        const gridZ = Math.floor(this.position.z);
-
-        if (!this.gridSystem.isValid(gridX, gridZ)) {
-            return;
-        }
+        // --- 1. Trail Logic ---
+        const currentGridX = Math.floor(this.position.x);
+        const currentGridZ = Math.floor(this.position.z);
         
-        // --- Trail Logic ---
-        if (gridX !== this.lastGridPos.x || gridZ !== this.lastGridPos.y) {
-            this.visitedPath.push(new Vector3(gridX + 0.5, 0.2, gridZ + 0.5));
-            this.lastGridPos = { x: gridX, y: gridZ };
+        if (currentGridX !== this.lastGridPos.x || currentGridZ !== this.lastGridPos.y) {
+            this.visitedPath.push(new Vector3(currentGridX + 0.5, 0.2, currentGridZ + 0.5));
+            this.lastGridPos = { x: currentGridX, y: currentGridZ };
         }
         this.updateTrail();
 
-        const cellType = this.gridSystem.getCell(gridX, gridZ);
-        let vx = 0;
-        let vz = 0;
-
-        // 2. Behavior based on cell type
-        if (cellType === CellType.Goal) {
-            // Parking Logic
-            const targetX = gridX + 0.5;
-            const targetZ = gridZ + 0.5;
-            const dx = targetX - this.position.x;
-            const dz = targetZ - this.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-
-            if (dist < 0.05) {
-                this.position.x = targetX;
-                this.position.z = targetZ;
-                this.updateMeshPosition();
-                this.updateTrail(); // Final update
-                return; // Stop
-            } else {
-                vx = (dx / dist) * this.speed;
-                vz = (dz / dist) * this.speed;
-            }
-        } else {
-            // 3. Base Movement
-            const index = this.gridSystem.getFlatIndex(gridX, gridZ);
-            const targetAngle = solver.policy[index];
-            
-            vx = Math.cos(targetAngle) * this.speed;
-            vz = Math.sin(targetAngle) * this.speed;
-
-            // 4. Wind
-            const windVec = this.gridSystem.getWindVector(gridX, gridZ);
-            const hasWind = (Math.abs(windVec.x) > 0.01 || Math.abs(windVec.y) > 0.01);
-
-            if (hasWind) {
-                const windMultiplier = 4.0;
-                vx += windVec.x * windMultiplier;
-                vz += windVec.y * windMultiplier;
-            } else {
-                 vx += (Math.random() - 0.5) * 0.5;
-                 vz += (Math.random() - 0.5) * 0.5;
-            }
+        // --- 2. Determine Planning Position ---
+        if (this.mode === 'mdp') {
+            this.virtualPosition.copyFrom(this.position);
         }
-
-        // 5. Integrate
-        const nextX = this.position.x + vx * deltaTime;
-        const nextZ = this.position.z + vz * deltaTime;
-
-        // 6. Wall Collision
-        const nextGridX = Math.floor(nextX);
-        const nextGridZ = Math.floor(nextZ);
         
-        if (this.gridSystem.isValid(nextGridX, nextGridZ)) {
-             const nextCell = this.gridSystem.getCell(nextGridX, nextGridZ);
-             if (nextCell !== CellType.Wall) {
-                 this.position.x = nextX;
-                 this.position.z = nextZ;
-             }
+        // Use Virtual Position to query the Policy (Brain)
+        const vGridX = Math.floor(this.virtualPosition.x);
+        const vGridZ = Math.floor(this.virtualPosition.z);
+
+        if (!this.gridSystem.isValid(vGridX, vGridZ)) {
+            // Virtual agent went off grid? Stop virtual?
+            // Just return, real agent stops too
+            return;
         }
+
+        // --- 3. Calculate Command Velocity (Intention) ---
+        let vxCommand = 0;
+        let vzCommand = 0;
+        
+        // Check Goal (Virtual Parking)
+        const cellType = this.gridSystem.getCell(vGridX, vGridZ);
+        if (cellType === CellType.Goal) {
+             const targetX = vGridX + 0.5;
+             const targetZ = vGridZ + 0.5;
+             const dx = targetX - this.virtualPosition.x;
+             const dz = targetZ - this.virtualPosition.z;
+             const dist = Math.sqrt(dx * dx + dz * dz);
+             
+             if (dist > 0.05) {
+                 vxCommand = (dx / dist) * this.speed;
+                 vzCommand = (dz / dist) * this.speed;
+             }
+             // Else stop (command 0)
+        } else {
+            // Policy
+            const index = this.gridSystem.getFlatIndex(vGridX, vGridZ);
+            const targetAngle = solver.policy[index];
+            vxCommand = Math.cos(targetAngle) * this.speed;
+            vzCommand = Math.sin(targetAngle) * this.speed;
+        }
+
+        // --- 4. Update Virtual Position (Perfect Execution) ---
+        this.virtualPosition.x += vxCommand * deltaTime;
+        this.virtualPosition.z += vzCommand * deltaTime;
+
+        // --- 5. Calculate Real Forces (Physics) ---
+        // Real movement = Command + Wind
+        // Wind is sampled at Real Position
+        const rGridX = Math.floor(this.position.x);
+        const rGridZ = Math.floor(this.position.z);
+        
+        const windVec = this.gridSystem.getWindVector(rGridX, rGridZ);
+        let vxWind = 0;
+        let vzWind = 0;
+        
+        if (Math.abs(windVec.x) > 0.01 || Math.abs(windVec.y) > 0.01) {
+            const windMultiplier = 4.0;
+            vxWind = windVec.x * windMultiplier;
+            vzWind = windVec.y * windMultiplier;
+        } else {
+            // Jitter
+            vxWind += (Math.random() - 0.5) * 0.5;
+            vzWind += (Math.random() - 0.5) * 0.5;
+        }
+
+        const totalVx = vxCommand + vxWind;
+        const totalVz = vzCommand + vzWind;
+
+        // 5. Integrate & Collision (Sliding with Radius)
+        const radius = 0.35;
+        const epsilon = 0.001;
+        
+        // --- X Axis ---
+        let nextX = this.position.x + totalVx * deltaTime;
+        let checkX = totalVx > 0 ? nextX + radius : nextX - radius;
+        let gridXCheck = Math.floor(checkX);
+        let gridZCheck = Math.floor(this.position.z); // Check against current Z row
+        
+        let colX = false;
+        if (this.gridSystem.isValid(gridXCheck, gridZCheck)) {
+            if (this.gridSystem.getCell(gridXCheck, gridZCheck) === CellType.Wall) {
+                colX = true;
+            }
+        }
+        
+        if (colX) {
+            // Hit wall, clamp
+            if (totalVx > 0) {
+                nextX = gridXCheck - radius - epsilon;
+            } else {
+                nextX = gridXCheck + 1 + radius + epsilon;
+            }
+        }
+        this.position.x = nextX;
+
+        // --- Z Axis ---
+        let nextZ = this.position.z + totalVz * deltaTime;
+        let checkZ = totalVz > 0 ? nextZ + radius : nextZ - radius;
+        gridXCheck = Math.floor(this.position.x); // Check against new X col
+        gridZCheck = Math.floor(checkZ);
+        
+        let colZ = false;
+        if (this.gridSystem.isValid(gridXCheck, gridZCheck)) {
+            if (this.gridSystem.getCell(gridXCheck, gridZCheck) === CellType.Wall) {
+                colZ = true;
+            }
+        }
+        
+        if (colZ) {
+            // Hit wall, clamp
+            if (totalVz > 0) {
+                nextZ = gridZCheck - radius - epsilon;
+            } else {
+                nextZ = gridZCheck + 1 + radius + epsilon;
+            }
+        }
+        this.position.z = nextZ;
 
         this.updateMeshPosition();
         
-        // 7. Rotation
-        if (Math.abs(vx) > 0.1 || Math.abs(vz) > 0.1) {
-            const targetPos = this.mesh.position.add(new Vector3(vx, 0, vz));
+        // Rotation (Face Actual Movement)
+        if (Math.abs(totalVx) > 0.1 || Math.abs(totalVz) > 0.1) {
+            const targetPos = this.mesh.position.add(new Vector3(totalVx, 0, totalVz));
             this.mesh.lookAt(targetPos);
         }
     }
@@ -179,7 +245,6 @@ export class Agent {
         // Construct points: History + Current Position
         const points = [...this.visitedPath, this.position];
         
-        // If only 1 point (start), we can't make a tube. Need at least 2.
         if (points.length < 2) return;
 
         if (this.trailMesh) {
@@ -189,6 +254,8 @@ export class Agent {
         this.trailMesh = MeshBuilder.CreateTube("trail", {
             path: points,
             radius: 0.05,
+            tessellation: 6, // Low-poly tube for performance
+            cap: Mesh.NO_CAP,
             updatable: false 
         }, this.scene);
         
@@ -201,6 +268,8 @@ export class Agent {
     public setPosition(x: number, y: number) {
         this.position.x = x + 0.5;
         this.position.z = y + 0.5;
+        this.virtualPosition.copyFrom(this.position); // Reset virtual
+        
         this.lastGridPos = { x, y };
         
         this.visitedPath = [this.position.clone()];

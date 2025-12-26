@@ -24,9 +24,10 @@ export class WindRenderer {
     private matricesBlades: Float32Array;
     private matricesParticles: Float32Array;
     private colorsParticles: Float32Array;
+    private particleOffsets: Float32Array; // Optimization: Pre-calc offsets
     
     // Constants
-    private readonly PARTICLES_PER_CELL = 4;
+    private readonly PARTICLES_PER_CELL = 8;
     private numCells: number;
     
     private time: number = 0;
@@ -40,6 +41,17 @@ export class WindRenderer {
         this.matricesBlades = new Float32Array(this.numCells * 16);
         this.matricesParticles = new Float32Array(this.numCells * this.PARTICLES_PER_CELL * 16);
         this.colorsParticles = new Float32Array(this.numCells * this.PARTICLES_PER_CELL * 4);
+        
+        // Pre-calc random offsets to avoid 20k sin/cos calls per frame
+        this.particleOffsets = new Float32Array(this.numCells * this.PARTICLES_PER_CELL * 2);
+        for (let i = 0; i < this.numCells; i++) {
+            for (let p = 0; p < this.PARTICLES_PER_CELL; p++) {
+                const idx = (i * this.PARTICLES_PER_CELL + p) * 2;
+                const seed = i * 100 + p;
+                this.particleOffsets[idx] = Math.sin(seed) * 0.5 + 0.5; // u
+                this.particleOffsets[idx + 1] = Math.cos(seed) * 0.5 + 0.5; // v
+            }
+        }
 
         this.createMeshes();
         
@@ -133,9 +145,9 @@ export class WindRenderer {
             if (speed > 0.01) {
                 // Render Particles
                 for (let p = 0; p < this.PARTICLES_PER_CELL; p++) {
-                    const seed = i * 100 + p;
-                    const randX = Math.sin(seed) * 0.5 + 0.5;
-                    const randY = Math.cos(seed) * 0.5 + 0.5;
+                    const offsetIdx = (i * this.PARTICLES_PER_CELL + p) * 2;
+                    const randX = this.particleOffsets[offsetIdx];
+                    const randY = this.particleOffsets[offsetIdx + 1];
 
                     const travel = this.time * speed * 0.5;
                     
