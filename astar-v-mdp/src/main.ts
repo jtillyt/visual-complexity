@@ -60,11 +60,9 @@ const createScene = () => {
     });
 
     // --- Camera Setup ---
-    const cameraPosition = new Vector3(15, 50, 15);
-    const camera = new FreeCamera("camera1", cameraPosition, scene);
+    const center = new Vector3(15, 0, 15);
+    const camera = new FreeCamera("camera1", new Vector3(15, 50, 15), scene);
     camera.mode = FreeCamera.ORTHOGRAPHIC_CAMERA;
-    camera.upVector = new Vector3(0, 0, 1); 
-    camera.setTarget(new Vector3(15, 0, 15));
     
     // Default bounds (fallback)
     const targetRadius = 18;
@@ -72,6 +70,23 @@ const createScene = () => {
     camera.orthoBottom = -targetRadius;
     camera.orthoLeft = -targetRadius;
     camera.orthoRight = targetRadius;
+
+    const setCameraView = (mode: '2d' | '3d') => {
+        if (mode === '2d') {
+            camera.position = new Vector3(15, 50, 15);
+            camera.setTarget(center);
+            camera.upVector = new Vector3(0, 0, 1);
+        } else {
+            // Isometric 45-degree view
+            // Positioned at corner (-10, 30, -10) looking at center (15, 0, 15)
+            camera.position = new Vector3(-10, 30, -10);
+            camera.setTarget(center);
+            camera.upVector = new Vector3(0, 1, 0);
+        }
+    };
+    
+    // Initialize 2D
+    setCameraView('2d');
 
     // --- Resize Handling ---
     const updateCameraProjection = () => {
@@ -130,13 +145,23 @@ const createScene = () => {
         solverDiv.className = 'solver-switch';
         solverDiv.style.marginBottom = '15px';
         solverDiv.style.display = 'flex';
+        solverDiv.style.flexDirection = 'column';
         solverDiv.style.gap = '10px';
         solverDiv.innerHTML = `
-            <label style="color: white; font-family: monospace;">Algorithm:</label>
-            <select id="solver-select" style="background: #333; color: cyan; border: 1px solid cyan; padding: 2px;">
-                <option value="mdp">MDP (Probabilistic)</option>
-                <option value="astar">A* (Deterministic)</option>
-            </select>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="color: white; font-family: monospace;">Algorithm:</label>
+                <select id="solver-select" style="background: #333; color: cyan; border: 1px solid cyan; padding: 2px;">
+                    <option value="mdp">MDP (Probabilistic)</option>
+                    <option value="astar">A* (Deterministic)</option>
+                </select>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label style="color: white; font-family: monospace;">View:</label>
+                <select id="view-select" style="background: #333; color: lime; border: 1px solid lime; padding: 2px;">
+                    <option value="2d">2D Top-Down</option>
+                    <option value="3d">2.5D Isometric</option>
+                </select>
+            </div>
         `;
         
         // Insert before buttons
@@ -152,6 +177,12 @@ const createScene = () => {
                 currentSolver = aStarSolver;
                 currentSolver.reset();
             }
+        };
+
+        const viewSelect = document.getElementById('view-select') as HTMLSelectElement;
+        viewSelect.onchange = (e) => {
+            const val = (e.target as HTMLSelectElement).value as '2d' | '3d';
+            setCameraView(val);
         };
 
         // 1.5 Wind Controls

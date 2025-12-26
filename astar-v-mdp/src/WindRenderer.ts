@@ -8,16 +8,19 @@ import { GridSystem, CellType } from './GridSystem';
 import "@babylonjs/core/Meshes/thinInstanceMesh";
 
 /**
- * WindRenderer visualizes the configured wind vectors.
- * Renders light blue pulsating arrows indicating direction and force.
+ * WindRenderer visualizes the configured wind vectors using Fan models.
+ * Renders a static housing and spinning blades indicating direction and force.
  */
 export class WindRenderer {
     private gridSystem: GridSystem;
     private scene: Scene;
-    private arrowMesh: Mesh;
+    
+    private housingMesh!: Mesh;
+    private bladeMesh!: Mesh;
     
     private numInstances: number;
-    private matrices: Float32Array;
+    private matricesHousing: Float32Array;
+    private matricesBlades: Float32Array;
     private colors: Float32Array;
     
     // Store wind data locally for animation
@@ -30,40 +33,57 @@ export class WindRenderer {
         this.scene = scene;
         this.numInstances = gridSystem.width * gridSystem.height;
         
-        this.matrices = new Float32Array(this.numInstances * 16);
+        this.matricesHousing = new Float32Array(this.numInstances * 16);
+        this.matricesBlades = new Float32Array(this.numInstances * 16);
         this.colors = new Float32Array(this.numInstances * 4);
         this.windData = new Float32Array(this.numInstances * 4);
 
-        this.arrowMesh = this.createArrowMesh();
+        this.createMeshes();
         this.initializeInstances();
         
-        // Register update loop for pulsing
+        // Register update loop for spinning/pulsing
         this.scene.onBeforeRenderObservable.add(() => {
             this.animate();
         });
     }
 
-    private createArrowMesh(): Mesh {
-        // Create a stylized wind arrow (maybe simpler or different from policy arrow)
-        // Let's use a similar shape but maybe longer shaft
-        const shaft = MeshBuilder.CreateCylinder("windShaft", { height: 0.6, diameter: 0.08 }, this.scene);
-        shaft.rotation.z = -Math.PI / 2; 
-        shaft.position.x = 0.3;
-
-        const head = MeshBuilder.CreateCylinder("windHead", { height: 0.3, diameterTop: 0, diameterBottom: 0.2 }, this.scene);
-        head.rotation.z = -Math.PI / 2;
-        head.position.x = 0.75;
-
-        const arrow = Mesh.MergeMeshes([shaft, head], true, true, undefined, false, true)!;
-        arrow.name = "windArrow";
+    private createMeshes(): void {
+        // 1. Create Housing (Ring)
+        // Oriented to face +X direction (Rotation 0)
+        const ring = MeshBuilder.CreateTorus("fanHousing", {
+            diameter: 0.8,
+            thickness: 0.15,
+            tessellation: 16
+        }, this.scene);
         
-        const material = new StandardMaterial("windMat", this.scene);
-        material.emissiveColor = new Color3(0.5, 0.8, 1.0); // Light Blue
-        material.disableLighting = true;
-        arrow.material = material;
-        arrow.useVertexColors = true; 
+        // Torus default lies on XZ. Rotate to lie on YZ (Facing X)
+        ring.rotation.z = Math.PI / 2;
         
-        return arrow;
+        const housingMat = new StandardMaterial("fanHousingMat", this.scene);
+        housingMat.emissiveColor = new Color3(0.2, 0.4, 0.6); // Darker Blue structure
+        housingMat.disableLighting = true;
+        ring.material = housingMat;
+        ring.useVertexColors = true; // Use instance colors
+
+        this.housingMesh = ring;
+
+        // 2. Create Blades (Propeller)
+        // Two crossed boxes
+        // They need to be in the YZ plane to face X.
+        // Thickness in X.
+        const blade1 = MeshBuilder.CreateBox("b1", { width: 0.05, height: 0.7, depth: 0.1 }, this.scene);
+        const blade2 = MeshBuilder.CreateBox("b2", { width: 0.05, height: 0.1, depth: 0.7 }, this.scene);
+        
+        const propeller = Mesh.MergeMeshes([blade1, blade2], true, true, undefined, false, true)!;
+        propeller.name = "fanBlades";
+        
+        const bladeMat = new StandardMaterial("fanBladeMat", this.scene);
+        bladeMat.emissiveColor = new Color3(0.6, 0.9, 1.0); // Bright Cyan
+        bladeMat.disableLighting = true;
+        propeller.material = bladeMat;
+        propeller.useVertexColors = true;
+
+        this.bladeMesh = propeller;
     }
 
     private initializeInstances(): void {
@@ -78,7 +98,7 @@ export class WindRenderer {
         const width = this.gridSystem.width;
         const height = this.gridSystem.height;
         
-        // Color is constant light blue
+        // Base Color
         const color = new Color4(0.5, 0.8, 1.0, 1.0);
 
         for (let y = 0; y < height; y++) {
@@ -102,24 +122,40 @@ export class WindRenderer {
                         this.colors[index * 4 + 3] = color.a;
                     } else {
                         this.windData[index * 4 + 3] = 0;
-                        this.colors[index * 4 + 3] = 0; // Transparent
+                        this.colors[index * 4 + 3] = 0;
                     }
                 } else {
                     this.windData[index * 4 + 3] = 0;
-                    this.colors[index * 4 + 3] = 0; // Transparent
+                    this.colors[index * 4 + 3] = 0;
                 }
             }
         }
 
-        // We update matrices in animate(), but colors only need update here
-        this.arrowMesh.thinInstanceSetBuffer("color", this.colors, 4);
+        // Update colors for both meshes
+        this.housingMesh.thinInstanceSetBuffer("color", this.colors, 4);
+        this.bladeMesh.thinInstanceSetBuffer("color", this.colors, 4);
     }
 
     private animate(): void {
-        this.time += this.scene.getEngine().getDeltaTime() / 1000.0;
-        const pulse = (Math.sin(this.time * 5.0) + 1) * 0.5; // 0 to 1
+        const dt = this.scene.getEngine().getDeltaTime() / 1000.0;
+        this.time += dt;
 
         const width = this.gridSystem.width;
+
+        // Reusable objects to avoid GC
+        const translation = Vector3.Zero();
+        const scale = Vector3.Zero();
+        const housingRot = Quaternion.Identity();
+        const spinRot = Quaternion.Identity();
+        const bladeRot = Quaternion.Identity();
+        const tempMatrix = Matrix.Identity();
+        
+        // Static vectors
+        const up = Vector3.Up();
+        const right = Vector3.Right();
+        
+        // Spin speed factor (radians per second)
+        const baseSpinSpeed = 10.0; 
 
         for (let i = 0; i < this.numInstances; i++) {
             if (this.windData[i * 4 + 3] === 1) { // If active
@@ -132,41 +168,51 @@ export class WindRenderer {
                 const worldX = x + 0.5;
                 const worldZ = y + 0.5;
 
-                // Calculate Rotation
+                // 1. Directional Rotation (Housing & Blades)
+                // Default points +X.
                 const angle = Math.atan2(dy, dx);
-                const rotation = Quaternion.RotationAxis(Vector3.Up(), -angle);
+                Quaternion.RotationAxisToRef(up, -angle, housingRot);
 
-                // Calculate Scale based on Force and Pulse
-                // Base scale increases with force (logarithmic or linear?)
-                // Force 1..10. 
-                const baseScale = 0.5 + (force / 5.0); // 0.7 to 2.5
-                const pulseScale = baseScale + (pulse * 0.2); // Pulse adds up to 0.2 size
-
-                const matrix = Matrix.Compose(
-                    new Vector3(pulseScale, pulseScale, pulseScale),
-                    rotation,
-                    new Vector3(worldX, 0.4, worldZ) // Higher than policy arrows (0.1)
-                );
+                // 2. Scale
+                const baseScale = 0.6 + (force * 0.05); // Subtle size difference based on force
+                scale.set(baseScale, baseScale, baseScale);
                 
-                matrix.copyToArray(this.matrices, i * 16);
+                // 3. Position (Hover slightly)
+                translation.set(worldX, 0.5, worldZ); 
+
+                // --- Build Housing Matrix ---
+                Matrix.ComposeToRef(scale, housingRot, translation, tempMatrix);
+                tempMatrix.copyToArray(this.matricesHousing, i * 16);
+
+                // --- Build Blade Matrix ---
+                // Spin around local X axis (since mesh faces X)
+                // Spin speed increases with force
+                const currentSpin = this.time * (baseSpinSpeed + force * 2.0);
+                Quaternion.RotationAxisToRef(right, currentSpin, spinRot);
+                
+                // Combine rotations: Apply spin first (local), then direction (global)
+                // Q_final = Q_direction * Q_spin
+                housingRot.multiplyToRef(spinRot, bladeRot);
+                
+                Matrix.ComposeToRef(scale, bladeRot, translation, tempMatrix);
+                tempMatrix.copyToArray(this.matricesBlades, i * 16);
+
             } else {
-                // Ensure hidden instances stay hidden (scale 0)
-                // If we don't update them every frame, they stay 0 from initialization
-                // But initialization logic needs to set them to 0.
-                // Let's just set 0 scale here to be safe if they were just turned off
-                // Optimization: Track dirty state? No, 900 iterations is fast.
+                // Set scale to 0 to hide
+                scale.setAll(0);
+                translation.setAll(0); // Optional, but keeps it clean
                 
-                // Set scale to 0
-                const matrix = Matrix.Compose(
-                    Vector3.Zero(),
-                    Quaternion.Identity(),
-                    Vector3.Zero()
-                );
-                matrix.copyToArray(this.matrices, i * 16);
-                // Ideally we shouldn't iterate all if few are wind, but array is packed.
+                // We can reuse the same zero matrix for both
+                // Use housingRot (which might be dirty)? No, Identity is safer but ComposeToRef handles it.
+                // Just use Identity rotation for zero matrix.
+                Matrix.ComposeToRef(scale, housingRot, translation, tempMatrix); // Rotation doesn't matter if scale is 0
+                
+                tempMatrix.copyToArray(this.matricesHousing, i * 16);
+                tempMatrix.copyToArray(this.matricesBlades, i * 16);
             }
         }
 
-        this.arrowMesh.thinInstanceSetBuffer("matrix", this.matrices, 16, false);
+        this.housingMesh.thinInstanceSetBuffer("matrix", this.matricesHousing, 16, false);
+        this.bladeMesh.thinInstanceSetBuffer("matrix", this.matricesBlades, 16, false);
     }
 }
