@@ -20,6 +20,9 @@ This project is part of the "Jaybird Labs" portfolio (Principal Engineer Brand).
 -   **`FlowRenderer.ts` (The View):**
     -   Instead of drawing 1 mesh per arrow (too slow for 2500 cells), use **Babylon.js Solid Particle System (SPS)** or **Thin Instances** to render thousands of policy arrows efficiently.
     -   Arrows should smoothly interpolate directions, creating a "liquid" visual effect.
+-   **`ExplosionRenderer.ts` (The FX):**
+    -   Manages particle systems for visual feedback (e.g., orange sparks when hitting a wall).
+    -   Keep FX logic separate from core rendering to allow for distinct update cycles or disabling.
 
 ### 2. The Interaction Model
 -   **Mode A (Deterministic):** User draws walls. Agent plans straight line (A* style).
@@ -27,6 +30,9 @@ This project is part of the "Jaybird Labs" portfolio (Principal Engineer Brand).
     -   Solver updates Value Map in real-time.
     -   Policy arrows ripple around the wind.
     -   Agent takes a curved path to maximize safety.
+-   **Simulation Controls:**
+    -   **Run / Stop:** Toggles the physics simulation (Pause/Resume). Does not reset the agent.
+    -   **Reset Agent:** Teleports the agent back to its starting position for the current run to retry the scenario.
 
 ## Implementation Phases
 

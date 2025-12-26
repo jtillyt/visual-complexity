@@ -158,6 +158,10 @@ const createScene = () => {
         if (!toolsSection || !buttonsContainer || !mainLayout) return;
 
         // --- Top Bar (Play/Stop & Compass) ---
+        // The Top Bar hosts the simulation controls.
+        // Logic:
+        // - "Run/Stop": Toggles the simulation loop. It acts as a Pause/Resume.
+        // - "Reset Agent": Manually moves the agent back to the start of the current run.
         const topBar = document.createElement('div');
         topBar.style.position = 'absolute';
         topBar.style.top = '0';
@@ -206,7 +210,9 @@ const createScene = () => {
             }
         };
         
-        // Reset Button
+        // Reset Button:
+        // Explicitly handles "Try Again" functionality.
+        // It restores the agent to 'agentStartPos' which is captured when 'Run' is first clicked.
         const resetBtn = document.createElement('button');
         resetBtn.textContent = '↺ RESET AGENT';
         resetBtn.style.pointerEvents = 'auto';

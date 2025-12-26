@@ -122,35 +122,34 @@ export class Agent {
         const vGridX = Math.floor(this.virtualPosition.x);
         const vGridZ = Math.floor(this.virtualPosition.z);
 
-        if (!this.gridSystem.isValid(vGridX, vGridZ)) {
-            return;
-        }
-
         // --- 3. Calculate Command Velocity (Intention) ---
         let vxCommand = 0;
         let vzCommand = 0;
         
-        // Check Goal (Virtual Parking)
-        const cellType = this.gridSystem.getCell(vGridX, vGridZ);
-        if (cellType === CellType.Goal) {
-             const targetX = vGridX + 0.5;
-             const targetZ = vGridZ + 0.5;
-             const dx = targetX - this.virtualPosition.x;
-             const dz = targetZ - this.virtualPosition.z;
-             const dist = Math.sqrt(dx * dx + dz * dz);
-             
-             if (dist > 0.05) {
-                 vxCommand = (dx / dist) * this.speed;
-                 vzCommand = (dz / dist) * this.speed;
-             }
-             // Else stop virtually
-        } else {
-            // Policy
-            const index = this.gridSystem.getFlatIndex(vGridX, vGridZ);
-            const targetAngle = solver.policy[index];
-            vxCommand = Math.cos(targetAngle) * this.speed;
-            vzCommand = Math.sin(targetAngle) * this.speed;
+        if (this.gridSystem.isValid(vGridX, vGridZ)) {
+            // Check Goal (Virtual Parking)
+            const cellType = this.gridSystem.getCell(vGridX, vGridZ);
+            if (cellType === CellType.Goal) {
+                 const targetX = vGridX + 0.5;
+                 const targetZ = vGridZ + 0.5;
+                 const dx = targetX - this.virtualPosition.x;
+                 const dz = targetZ - this.virtualPosition.z;
+                 const dist = Math.sqrt(dx * dx + dz * dz);
+                 
+                 if (dist > 0.05) {
+                     vxCommand = (dx / dist) * this.speed;
+                     vzCommand = (dz / dist) * this.speed;
+                 }
+                 // Else stop virtually
+            } else {
+                // Policy
+                const index = this.gridSystem.getFlatIndex(vGridX, vGridZ);
+                const targetAngle = solver.policy[index];
+                vxCommand = Math.cos(targetAngle) * this.speed;
+                vzCommand = Math.sin(targetAngle) * this.speed;
+            }
         }
+        // If invalid (out of bounds), command is 0, but physics continues to resolve collision with edge.
 
         // --- 4. Update Virtual Position (Perfect Execution) ---
         this.virtualPosition.x += vxCommand * deltaTime;
