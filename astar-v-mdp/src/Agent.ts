@@ -21,6 +21,7 @@ export class Agent {
     public virtualPosition: Vector3; // "Mental" position (Where it thinks it is in A* mode)
     
     public isStopped: boolean = false;
+    public stopReason: 'none' | 'wall' | 'goal' | 'user' = 'none';
     
     private speed: number = 8.0;
     private mode: 'astar' | 'mdp' = 'astar';
@@ -173,6 +174,7 @@ export class Agent {
                  this.updateMeshPosition();
                  this.updateTrail();
                  this.isStopped = true; // STOP SIMULATION
+                 this.stopReason = 'goal';
                  return; 
              }
         }
@@ -217,6 +219,7 @@ export class Agent {
             if (totalVx > 0) nextX = gridXCheck - radius - epsilon;
             else nextX = gridXCheck + 1 + radius + epsilon;
             this.isStopped = true; // Hit Wall/Edge
+            this.stopReason = 'wall';
         }
         this.position.x = nextX;
 
@@ -239,6 +242,7 @@ export class Agent {
             if (totalVz > 0) nextZ = gridZCheck - radius - epsilon;
             else nextZ = gridZCheck + 1 + radius + epsilon;
             this.isStopped = true; // Hit Wall/Edge
+            this.stopReason = 'wall';
         }
         this.position.z = nextZ;
 
@@ -287,6 +291,7 @@ export class Agent {
         this.virtualPosition.copyFrom(this.position); 
         
         this.isStopped = false;
+        this.stopReason = 'none';
         this.lastGridPos = { x, y };
         
         this.visitedPath = [this.position.clone()];

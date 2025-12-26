@@ -14,6 +14,7 @@ import { GridSystem, CellType } from './GridSystem';
 import { GridRenderer } from './GridRenderer';
 import { FlowRenderer } from './FlowRenderer';
 import { WindRenderer } from './WindRenderer';
+import { ExplosionRenderer } from './ExplosionRenderer';
 import { Agent } from './Agent';
 import type { Solver } from './Solver';
 import { MdpSolver } from './MdpSolver';
@@ -50,6 +51,7 @@ const createScene = () => {
     const gridRenderer = new GridRenderer(gridSystem, scene);
     const flowRenderer = new FlowRenderer(gridSystem, scene);
     const windRenderer = new WindRenderer(gridSystem, scene);
+    const explosionRenderer = new ExplosionRenderer(scene);
     const agent = new Agent(gridSystem, scene, 0, 0);
 
     // --- Solvers ---
@@ -60,26 +62,34 @@ const createScene = () => {
 
     // --- Render Loop Logic ---
     scene.onBeforeRenderObservable.add(() => {
-        // Only recalculate path if stopped (Create Mode) OR if using MDP (Probabilistic)
+        // Only recalculate path/visuals if stopped (Create Mode) OR if using MDP (Probabilistic)
         if (!isSimulationRunning || currentSolverType === 'mdp') {
             currentSolver.iterate(currentSolverType === 'astar' ? agent.virtualPosition : agent.position);
+            
+            const values = currentSolver.getValues();
+            flowRenderer.updatePolicy(currentSolver.policy, values, currentSolverType);
+            gridRenderer.updateVisuals(values, currentSolverType);
         }
         
-        const values = currentSolver.getValues();
-        flowRenderer.updatePolicy(currentSolver.policy, values, currentSolverType);
-        gridRenderer.updateVisuals(values, currentSolverType);
-        
         if (isSimulationRunning) {
-            agent.update(engine.getDeltaTime() / 1000, currentSolver);
+            const dt = engine.getDeltaTime() / 1000;
+            agent.update(dt, currentSolver);
             
             // Check if agent stopped (Collision/Goal/Edge)
             if (agent.isStopped) {
+                if (agent.stopReason === 'wall') {
+                    explosionRenderer.trigger(agent.position);
+                    agent.stopReason = 'none'; // Prevent re-trigger
+                }
+
                 const stopBtn = document.getElementById('btn-play-simulation');
                 if (stopBtn && isSimulationRunning) {
                     stopBtn.click(); // Trigger the stop logic
                 }
             }
         }
+        
+        explosionRenderer.update(engine.getDeltaTime() / 1000);
         
         // Update Compass
         const compass = document.getElementById('compass-container');
@@ -165,7 +175,7 @@ const createScene = () => {
         // Play Button
         const playBtn = document.createElement('button');
         playBtn.id = 'btn-play-simulation';
-        playBtn.textContent = '▶ RUN SIMULATION';
+        playBtn.textContent = '▶ RUN';
         playBtn.style.pointerEvents = 'auto';
         playBtn.style.background = 'rgba(0, 20, 40, 0.8)';
         playBtn.style.border = '2px solid #0f0';
@@ -175,26 +185,56 @@ const createScene = () => {
         playBtn.style.fontSize = '16px';
         playBtn.style.cursor = 'pointer';
         playBtn.style.fontWeight = 'bold';
+        playBtn.style.marginRight = '10px';
         
         playBtn.onclick = () => {
             isSimulationRunning = !isSimulationRunning;
             if (isSimulationRunning) {
-                playBtn.textContent = '⏹ STOP / RESET';
+                playBtn.textContent = '⏹ STOP';
                 playBtn.style.borderColor = '#f00';
                 playBtn.style.color = '#f00';
-                // Store start pos
+                
+                // Store start pos for Reset button
                 agentStartPos = { x: Math.floor(agent.position.x), y: Math.floor(agent.position.z) };
+                
                 agent.setMode(currentSolverType);
             } else {
-                playBtn.textContent = '▶ RUN SIMULATION';
+                playBtn.textContent = '▶ RUN';
                 playBtn.style.borderColor = '#0f0';
                 playBtn.style.color = '#0f0';
-                // Reset Agent
-                agent.setPosition(agentStartPos.x, agentStartPos.y);
-                currentSolver.reset(); // Reset solver state (visited nodes etc)
+                // Do NOT reset agent position here.
             }
         };
-        topBar.appendChild(playBtn);
+        
+        // Reset Button
+        const resetBtn = document.createElement('button');
+        resetBtn.textContent = '↺ RESET AGENT';
+        resetBtn.style.pointerEvents = 'auto';
+        resetBtn.style.background = 'rgba(0, 20, 40, 0.8)';
+        resetBtn.style.border = '2px solid cyan';
+        resetBtn.style.color = 'cyan';
+        resetBtn.style.padding = '10px 20px';
+        resetBtn.style.fontFamily = 'monospace';
+        resetBtn.style.fontSize = '16px';
+        resetBtn.style.cursor = 'pointer';
+        resetBtn.style.fontWeight = 'bold';
+        
+        resetBtn.onclick = () => {
+             // Stop if running
+             if (isSimulationRunning) {
+                 playBtn.click();
+             }
+             // Reset to last start pos
+             agent.setPosition(agentStartPos.x, agentStartPos.y);
+             currentSolver.reset();
+        };
+
+        const btnGroup = document.createElement('div');
+        btnGroup.style.display = 'flex';
+        btnGroup.appendChild(playBtn);
+        btnGroup.appendChild(resetBtn);
+        
+        topBar.appendChild(btnGroup);
 
         // Compass
         const compass = document.createElement('div');
