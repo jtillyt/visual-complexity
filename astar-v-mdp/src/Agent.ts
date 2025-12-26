@@ -66,25 +66,16 @@ export class Agent {
         let vx = Math.cos(targetAngle) * this.speed;
         let vz = Math.sin(targetAngle) * this.speed;
 
-        // 4. Apply Environmental Forces
-        if (cellType === CellType.Wind) {
-            const wind = this.gridSystem.getWindConfig(gridX, gridZ);
-            if (wind) {
-                // Wind Force: Force units * Multiplier
-                // A force of 1 should be significant.
-                // If Agent speed is 8, and Wind Force is 2.
-                // We want Wind to be able to overpower agent.
-                // Let's say 1 Force unit = 2 units of speed.
-                const windMultiplier = 4.0; 
-                vx += wind.dx * wind.force * windMultiplier;
-                vz += wind.dy * wind.force * windMultiplier;
-            } else {
-                // Fallback turbulence
-                vx += (Math.random() - 0.5) * 5.0;
-                vz += (Math.random() - 0.5) * 5.0;
-            }
+        // 4. Apply Environmental Forces (Wind Field)
+        const windVec = this.gridSystem.getWindVector(gridX, gridZ);
+        const hasWind = (Math.abs(windVec.x) > 0.01 || Math.abs(windVec.y) > 0.01);
+
+        if (hasWind) {
+            const windMultiplier = 4.0;
+            vx += windVec.x * windMultiplier;
+            vz += windVec.y * windMultiplier;
         } else {
-             // Minor organic jitter
+             // Minor organic jitter when no wind
              vx += (Math.random() - 0.5) * 0.5;
              vz += (Math.random() - 0.5) * 0.5;
         }

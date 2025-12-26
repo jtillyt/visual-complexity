@@ -3,11 +3,11 @@ import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
-import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
+import { GlowLayer } from '@babylonjs/core/Layers/glowLayer';
 import "@babylonjs/core/Culling/ray"; 
 
 import { GridSystem, CellType } from './GridSystem';
@@ -36,7 +36,11 @@ const engine = new Engine(canvas, true);
 // Create Scene
 const createScene = () => {
     const scene = new Scene(engine);
-    scene.clearColor = new Color3(0.05, 0.05, 0.1).toColor4(); // Darker blue
+    scene.clearColor = new Color3(0.02, 0.02, 0.05).toColor4(); // Deep Void Black/Blue
+
+    // --- FX ---
+    const glow = new GlowLayer("glow", scene);
+    glow.intensity = 0.2;
 
     // --- Core Systems ---
     const gridSystem = new GridSystem(30, 30);
@@ -57,71 +61,45 @@ const createScene = () => {
     // --- Render Loop Logic ---
     scene.onBeforeRenderObservable.add(() => {
         currentSolver.iterate(agent.position);
-        flowRenderer.updatePolicy(currentSolver.policy, currentSolver.getValues(), currentSolverType);
+        const values = currentSolver.getValues();
+        flowRenderer.updatePolicy(currentSolver.policy, values, currentSolverType);
+        gridRenderer.updateVisuals(values, currentSolverType);
         agent.update(engine.getDeltaTime() / 1000, currentSolver);
     });
 
     // --- Camera Setup ---
     const center = new Vector3(15, 0, 15);
     
-    // 1. 2D Top-Down Camera
-    const camera2D = new FreeCamera("camera2D", new Vector3(15, 50, 15), scene);
-    camera2D.mode = FreeCamera.ORTHOGRAPHIC_CAMERA;
-    camera2D.setTarget(center);
-    camera2D.upVector = new Vector3(0, 0, 1);
-    
-    // 2. 3D Orbit Camera
-    const camera3D = new ArcRotateCamera("camera3D", -Math.PI / 2, Math.PI / 3, 40, center, scene);
-    camera3D.lowerRadiusLimit = 10;
-    camera3D.upperRadiusLimit = 100;
-    // We don't attach controls yet, we do it when active
-    
-    // Default bounds (fallback) for 2D
-    const targetRadius = 18;
-    camera2D.orthoTop = targetRadius;
-    camera2D.orthoBottom = -targetRadius;
-    camera2D.orthoLeft = -targetRadius;
-    camera2D.orthoRight = targetRadius;
+    // Single Orbit Camera
+    const camera = new ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 3, 40, center, scene);
+    camera.lowerRadiusLimit = 10;
+    camera.upperRadiusLimit = 100;
+    camera.attachControl(canvas, true);
 
-    const setCameraView = (mode: '2d' | '3d') => {
-        // Detach all first
-        camera3D.detachControl();
-        
-        if (mode === '2d') {
-            scene.activeCamera = camera2D;
+    const setCameraView = (mode: 'top' | 'iso') => {
+        if (mode === 'top') {
+            // Top-down view
+            camera.beta = 0.01; // Avoid 0 to prevent gimbal lock issues
+            camera.alpha = -Math.PI / 2;
         } else {
-            scene.activeCamera = camera3D;
-            camera3D.attachControl(canvas, true);
+            // Isometric view
+            camera.beta = Math.PI / 3;
+            camera.alpha = -Math.PI / 2;
         }
     };
     
-    // Initialize 2D
-    setCameraView('2d');
+    // Initialize Iso
+    setCameraView('iso');
 
     // --- Resize Handling ---
     const updateCameraProjection = () => {
         engine.resize();
-        
-        let width = canvasContainer ? canvasContainer.clientWidth : engine.getRenderWidth();
-        let height = canvasContainer ? canvasContainer.clientHeight : engine.getRenderHeight();
-        
-        if (width <= 0 || height <= 0 || isNaN(width) || isNaN(height)) return;
-        
-        const aspectRatio = width / height;
-        const targetRadius = 18; 
-
-        if (aspectRatio >= 1) {
-            camera2D.orthoTop = targetRadius;
-            camera2D.orthoBottom = -targetRadius;
-            camera2D.orthoLeft = -targetRadius * aspectRatio;
-            camera2D.orthoRight = targetRadius * aspectRatio;
-        } else {
-            camera2D.orthoLeft = -targetRadius;
-            camera2D.orthoRight = targetRadius;
-            camera2D.orthoTop = targetRadius / aspectRatio;
-            camera2D.orthoBottom = -targetRadius / aspectRatio;
-        }
     };
+    
+    if (canvasContainer) {
+        new ResizeObserver(updateCameraProjection).observe(canvasContainer);
+    }
+    window.addEventListener('resize', updateCameraProjection);
     
     if (canvasContainer) {
         new ResizeObserver(updateCameraProjection).observe(canvasContainer);
@@ -168,8 +146,8 @@ const createScene = () => {
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <label style="color: white; font-family: monospace;">View:</label>
                 <select id="view-select" style="background: #333; color: lime; border: 1px solid lime; padding: 2px;">
-                    <option value="2d">2D Top-Down</option>
-                    <option value="3d">2.5D Isometric</option>
+                    <option value="iso">Angled View</option>
+                    <option value="top">Top View</option>
                 </select>
             </div>
         `;
@@ -193,7 +171,7 @@ const createScene = () => {
 
         const viewSelect = document.getElementById('view-select') as HTMLSelectElement;
         viewSelect.onchange = (e) => {
-            const val = (e.target as HTMLSelectElement).value as '2d' | '3d';
+            const val = (e.target as HTMLSelectElement).value as 'top' | 'iso';
             setCameraView(val);
         };
 

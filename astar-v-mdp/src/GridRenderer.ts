@@ -1,7 +1,7 @@
 import { Scene } from '@babylonjs/core/scene';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { GridSystem, CellType } from './GridSystem';
-import { Color4, Color3 } from '@babylonjs/core/Maths/math.color';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
@@ -9,7 +9,7 @@ import "@babylonjs/core/Meshes/thinInstanceMesh";
 
 /**
  * GridRenderer handles the visualization of the static grid cells (Floor, Walls, Goal).
- * It uses Babylon.js Thin Instances to render 2500+ tiles efficiently with a single draw call.
+ * Supports "Holographic Table" aesthetic with glowing paths and floating tiles.
  */
 export class GridRenderer {
     private gridSystem: GridSystem;
@@ -36,23 +36,21 @@ export class GridRenderer {
         tile.useVertexColors = true; 
         
         const material = new StandardMaterial("tileMat", this.scene);
-        // Lighting enabled for 3D depth, but with high emissive for visibility against dark bg
-        material.disableLighting = false; 
-        material.emissiveColor = new Color3(0.2, 0.2, 0.2); 
-        material.specularColor = new Color3(0.1, 0.1, 0.1);
+        // High emissive to allow vertex colors to drive the glow
+        material.emissiveColor = Color3.White(); 
+        material.disableLighting = true; // Flat, glowing look
         tile.material = material;
         
         // Ensure bounding box covers all instances
         tile.alwaysSelectAsActiveMesh = true;
-        // Disable picking on visual tiles so we hit the invisible ground plane
         tile.isPickable = false;
 
         return tile;
     }
 
     /**
-     * Updates the visual representation of the grid based on the GridSystem state.
-     * Updates both color (type) and matrix (scale/position) buffers.
+     * Rebuilds geometry (matrices) and resets base colors.
+     * Call this when grid structure changes (Paint).
      */
     public update(): void {
         const width = this.gridSystem.width;
@@ -63,31 +61,27 @@ export class GridRenderer {
                 const index = y * width + x;
                 const type = this.gridSystem.getCell(x, y);
                 
-                // 1. Update Color
-                const color = this.getColorForType(type);
-                this.colorsData[index * 4 + 0] = color.r;
-                this.colorsData[index * 4 + 1] = color.g;
-                this.colorsData[index * 4 + 2] = color.b;
-                this.colorsData[index * 4 + 3] = color.a;
-
-                // 2. Update Matrix (Scale & Position)
+                // 1. Update Matrix (Scale & Position)
                 const worldX = x + 0.5;
                 const worldZ = y + 0.5;
-                let scaleY = 0.1; // Default floor thickness
-                let posY = 0.05;  // Half of 0.1
+                let scaleY = 0.1; // Floor thickness
+                let posY = 0.05;  
 
                 if (type === CellType.Wall) {
                     scaleY = 1.0; // Wall height
-                    posY = 0.5;   // Half of 1.0
+                    posY = 0.5;   
                 }
 
                 const matrix = Matrix.Compose(
-                    new Vector3(0.9, scaleY, 0.9), // Gap between tiles
+                    new Vector3(0.95, scaleY, 0.95), // Small gap
                     Quaternion.Identity(),
                     new Vector3(worldX, posY, worldZ)
                 );
                 
                 matrix.copyToArray(this.matricesData, index * 16);
+                
+                // Set default color
+                this.setColor(index, type, 0, 'mdp');
             }
         }
         
@@ -95,17 +89,61 @@ export class GridRenderer {
         this.tileMesh.thinInstanceSetBuffer("color", this.colorsData, 4, false);
     }
 
-    private getColorForType(type: CellType): Color4 {
+    /**
+     * Updates only the colors based on solver values (Path highlighting).
+     * Call this in the render loop.
+     */
+    public updateVisuals(values: Float32Array, mode: 'astar' | 'mdp'): void {
+         const width = this.gridSystem.width;
+         const height = this.gridSystem.height;
+         
+         for (let i = 0; i < width * height; i++) {
+             const x = i % width;
+             const y = Math.floor(i / width);
+             const type = this.gridSystem.getCell(x, y);
+             
+             this.setColor(i, type, values[i], mode);
+         }
+         
+         this.tileMesh.thinInstanceBufferUpdated("color");
+    }
+
+    private setColor(index: number, type: CellType, value: number, mode: 'astar' | 'mdp'): void {
+        let r=0, g=0, b=0, a=1;
+
         switch (type) {
             case CellType.Wall:
-                return new Color4(0.5, 0.5, 0.6, 1); // Brighter Steel Wall
+                r = 0.1; g = 0.1; b = 0.15; // Dark Metal
+                break;
             case CellType.Wind:
-                return new Color4(0.8, 0.3, 0.3, 1); // Reddish floor
+                r = 1.0; g = 0.1; b = 0.1; // Neon Red
+                break;
             case CellType.Goal:
-                return new Color4(0.3, 0.9, 0.3, 1); // Green floor
+                r = 0.0; g = 1.0; b = 0.5; // Neon Green
+                break;
             case CellType.Empty:
             default:
-                return new Color4(0.2, 0.2, 0.3, 1); // Brighter Blue-Grey floor
+                if (mode === 'astar') {
+                    if (value > 0.9) {
+                        // Path
+                        r = 0.0; g = 1.0; b = 0.5; 
+                    } else if (value > 0.1) {
+                        // Visited
+                        r = 0.0; g = 0.2; b = 0.1; 
+                    } else {
+                        // Unvisited
+                        r = 0.02; g = 0.02; b = 0.05; 
+                    }
+                } else {
+                    // MDP Mode - Standard floor
+                    r = 0.02; g = 0.02; b = 0.05;
+                }
+                break;
         }
+
+        this.colorsData[index * 4 + 0] = r;
+        this.colorsData[index * 4 + 1] = g;
+        this.colorsData[index * 4 + 2] = b;
+        this.colorsData[index * 4 + 3] = a;
     }
 }
