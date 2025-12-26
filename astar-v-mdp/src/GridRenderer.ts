@@ -7,6 +7,10 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import "@babylonjs/core/Meshes/thinInstanceMesh"; 
 
+/**
+ * GridRenderer handles the visualization of the static grid cells (Floor, Walls, Goal).
+ * It uses Babylon.js Thin Instances to render 2500+ tiles efficiently with a single draw call.
+ */
 export class GridRenderer {
     private gridSystem: GridSystem;
     private scene: Scene;
@@ -46,6 +50,10 @@ export class GridRenderer {
         return tile;
     }
 
+    /**
+     * Updates the visual representation of the grid based on the GridSystem state.
+     * Updates both color (type) and matrix (scale/position) buffers.
+     */
     public update(): void {
         const width = this.gridSystem.width;
         const height = this.gridSystem.height;

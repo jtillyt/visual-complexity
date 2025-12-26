@@ -42,9 +42,9 @@ Use the dropdown in the tools panel to switch between:
 This visualization demonstrates the core difference between pathfinding and policy-based planning:
 
 ### The Invisible Trap (Wind)
-Unlike Walls, **Wind is ignored during the pre-planning phase** for both algorithms. This creates a "Trap" scenario:
+Unlike Walls, **Wind is ignored during the pre-planning phase** for both algorithms (Cost = 1, same as empty). This creates a "Trap" scenario:
 -   The **A* Solver** chooses the direct line through the wind, assuming it can move perfectly. Once it hits the wind, it is blown off course and must constantly recalculate.
--   The **MDP Solver** (in its current state) also plans through the wind but demonstrates how a global policy field allows for immediate correction even when pushed far from the "optimal" path.
+-   The **MDP Solver** (in its current configuration) also plans through the wind but demonstrates how a global policy field allows for immediate correction even when pushed far from the "optimal" path.
 
 ### Visual Representation
 -   **Policy Field (Cyan Arrows):** The "Brain" of the agent. Shows the intended direction for every cell.
@@ -53,12 +53,15 @@ Unlike Walls, **Wind is ignored during the pre-planning phase** for both algorit
 
 ## 📂 Project Structure
 
--   `src/GridSystem.ts`: Data layer for Walls, Goals, and Wind configurations.
--   `src/MdpSolver.ts`: Implements Value Iteration (Bellman Equation).
--   `src/AStarSolver.ts`: Implements A* Heuristic Search.
--   `src/FlowRenderer.ts`: High-performance visualization of the policy field.
--   `src/WindRenderer.ts`: Visualizes environmental forces with pulsating light-blue vectors.
--   `src/Agent.ts`: The "Rover" that interacts with both the policy and the physics of the world.
+-   `src/GridSystem.ts`: The raw data layer. Stores cell types (Wall, Empty, Goal, Wind) and specific Wind configurations (Direction/Force).
+-   `src/MdpSolver.ts`: Implements Value Iteration (Bellman Equation) to generate a global policy.
+-   `src/AStarSolver.ts`: Implements A* Pathfinding to generate a single optimal path (visualized as a policy along that path).
+-   `src/Solver.ts`: Interface defining the common structure for both solvers.
+-   `src/FlowRenderer.ts`: Visualizes the Policy (Solver output) using 2500+ instanced arrows.
+-   `src/WindRenderer.ts`: Visualizes the Wind (Environment) using pulsating instanced arrows.
+-   `src/GridRenderer.ts`: Renders the base grid tiles.
+-   `src/Agent.ts`: The "Rover" that interacts with both the policy (for intended direction) and the physics of the world (Wind force).
+-   `src/main.ts`: The entry point. Sets up the Babylon.js Scene, Camera, Light, UI, and Render Loop.
 
 ## 🎨 Visual Style
 "Cyberpunk Lab" / "Neon" aesthetic:

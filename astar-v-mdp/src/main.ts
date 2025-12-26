@@ -18,6 +18,13 @@ import type { Solver } from './Solver';
 import { MdpSolver } from './MdpSolver';
 import { AStarSolver } from './AStarSolver';
 
+/**
+ * Main Entry Point
+ * Sets up the Babylon.js scene, camera, and render loop.
+ * Initializes the Grid, Solvers, Renderers, and Agent.
+ * Handles user input (painting, tool selection) and UI integration.
+ */
+
 // Get the canvas element
 const canvas = document.getElementById('renderCanvas') as HTMLCanvasElement;
 const canvasContainer = document.getElementById('canvas-container');

@@ -54,75 +54,46 @@ export class Agent {
 
         // 2. Behavior based on cell type
         if (cellType === CellType.Goal) {
-            // Spin to celebrate
             this.mesh.rotation.y += 5 * deltaTime;
             return;
         }
 
-        // 3. Get Policy Angle
+        // 3. Base Movement from Policy
         const index = this.gridSystem.getFlatIndex(gridX, gridZ);
         const targetAngle = solver.policy[index];
+        
+        // Base Velocity vector (Policy direction * Agent Speed)
+        let vx = Math.cos(targetAngle) * this.speed;
+        let vz = Math.sin(targetAngle) * this.speed;
 
-        // 4. Calculate Velocity
-        let vx = Math.cos(targetAngle);
-        let vz = Math.sin(targetAngle);
-
-        // 5. Apply Wind (Invisible Trap)
+        // 4. Apply Environmental Forces
         if (cellType === CellType.Wind) {
-            // Get specific config
             const wind = this.gridSystem.getWindConfig(gridX, gridZ);
             if (wind) {
-                // Apply strong force in wind direction
-                // "Offset to be outside the vector" -> We interpret this as a strong push
-                // The force is "how many blocks of offset".
-                // Let's add a massive velocity component.
-                const windSpeed = wind.force * 5.0; // Arbitrary multiplier to make it feel like a "gust"
-                vx += wind.dx * windSpeed;
-                vz += wind.dy * windSpeed;
+                // Wind Force: Force units * Multiplier
+                // A force of 1 should be significant.
+                // If Agent speed is 8, and Wind Force is 2.
+                // We want Wind to be able to overpower agent.
+                // Let's say 1 Force unit = 2 units of speed.
+                const windMultiplier = 4.0; 
+                vx += wind.dx * wind.force * windMultiplier;
+                vz += wind.dy * wind.force * windMultiplier;
             } else {
-                // Default fallback if no config (shouldn't happen with new UI)
-                vx += (Math.random() - 0.5) * 3.0;
-                vz += (Math.random() - 0.5) * 3.0;
+                // Fallback turbulence
+                vx += (Math.random() - 0.5) * 5.0;
+                vz += (Math.random() - 0.5) * 5.0;
             }
         } else {
-             // Slight jitter for organic feel
-             vx += (Math.random() - 0.5) * 0.2;
-             vz += (Math.random() - 0.5) * 0.2;
+             // Minor organic jitter
+             vx += (Math.random() - 0.5) * 0.5;
+             vz += (Math.random() - 0.5) * 0.5;
         }
 
-        // Normalize speed (unless it's wind chaos, which can be faster/slower)
-        // actually if wind is pushing, we want to go fast.
-        // So we won't normalize if wind is active.
-        
-        // Let's simplify:
-        // Base velocity
-        const baseSpeed = this.speed * deltaTime;
-        let finalX = this.position.x + Math.cos(targetAngle) * baseSpeed;
-        let finalZ = this.position.z + Math.sin(targetAngle) * baseSpeed;
-        
-        if (cellType === CellType.Wind) {
-            const wind = this.gridSystem.getWindConfig(gridX, gridZ);
-            if (wind) {
-                 // Push agent by (Force * BlockSize) per second?
-                 // Or just Push = Force * Speed?
-                 // User said "Force (how many blocks of offset)".
-                 // Let's say force 1 = 1 block / sec extra speed?
-                 // Or force 1 = 1 block displacement PER FRAME? That's teleportation.
-                 // "When the rover comes within... it should be offset".
-                 // Let's do a strong push: Force * 5 * deltaTime.
-                 finalX += wind.dx * wind.force * 5.0 * deltaTime;
-                 finalZ += wind.dy * wind.force * 5.0 * deltaTime;
-            }
-        } else {
-             // Add small noise
-             finalX += (Math.random() - 0.5) * 0.2 * baseSpeed;
-             finalZ += (Math.random() - 0.5) * 0.2 * baseSpeed;
-        }
+        // 5. Integrate Position
+        const nextX = this.position.x + vx * deltaTime;
+        const nextZ = this.position.z + vz * deltaTime;
 
-        const nextX = finalX;
-        const nextZ = finalZ;
-
-        // Simple wall collision check (center point)
+        // 6. Wall Collision (Simple Check)
         const nextGridX = Math.floor(nextX);
         const nextGridZ = Math.floor(nextZ);
         
