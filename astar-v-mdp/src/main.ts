@@ -4,6 +4,7 @@ import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
@@ -61,27 +62,35 @@ const createScene = () => {
 
     // --- Camera Setup ---
     const center = new Vector3(15, 0, 15);
-    const camera = new FreeCamera("camera1", new Vector3(15, 50, 15), scene);
-    camera.mode = FreeCamera.ORTHOGRAPHIC_CAMERA;
     
-    // Default bounds (fallback)
+    // 1. 2D Top-Down Camera
+    const camera2D = new FreeCamera("camera2D", new Vector3(15, 50, 15), scene);
+    camera2D.mode = FreeCamera.ORTHOGRAPHIC_CAMERA;
+    camera2D.setTarget(center);
+    camera2D.upVector = new Vector3(0, 0, 1);
+    
+    // 2. 3D Orbit Camera
+    const camera3D = new ArcRotateCamera("camera3D", -Math.PI / 2, Math.PI / 3, 40, center, scene);
+    camera3D.lowerRadiusLimit = 10;
+    camera3D.upperRadiusLimit = 100;
+    // We don't attach controls yet, we do it when active
+    
+    // Default bounds (fallback) for 2D
     const targetRadius = 18;
-    camera.orthoTop = targetRadius;
-    camera.orthoBottom = -targetRadius;
-    camera.orthoLeft = -targetRadius;
-    camera.orthoRight = targetRadius;
+    camera2D.orthoTop = targetRadius;
+    camera2D.orthoBottom = -targetRadius;
+    camera2D.orthoLeft = -targetRadius;
+    camera2D.orthoRight = targetRadius;
 
     const setCameraView = (mode: '2d' | '3d') => {
+        // Detach all first
+        camera3D.detachControl();
+        
         if (mode === '2d') {
-            camera.position = new Vector3(15, 50, 15);
-            camera.setTarget(center);
-            camera.upVector = new Vector3(0, 0, 1);
+            scene.activeCamera = camera2D;
         } else {
-            // Isometric 45-degree view
-            // Positioned at corner (-10, 30, -10) looking at center (15, 0, 15)
-            camera.position = new Vector3(-10, 30, -10);
-            camera.setTarget(center);
-            camera.upVector = new Vector3(0, 1, 0);
+            scene.activeCamera = camera3D;
+            camera3D.attachControl(canvas, true);
         }
     };
     
@@ -101,15 +110,15 @@ const createScene = () => {
         const targetRadius = 18; 
 
         if (aspectRatio >= 1) {
-            camera.orthoTop = targetRadius;
-            camera.orthoBottom = -targetRadius;
-            camera.orthoLeft = -targetRadius * aspectRatio;
-            camera.orthoRight = targetRadius * aspectRatio;
+            camera2D.orthoTop = targetRadius;
+            camera2D.orthoBottom = -targetRadius;
+            camera2D.orthoLeft = -targetRadius * aspectRatio;
+            camera2D.orthoRight = targetRadius * aspectRatio;
         } else {
-            camera.orthoLeft = -targetRadius;
-            camera.orthoRight = targetRadius;
-            camera.orthoTop = targetRadius / aspectRatio;
-            camera.orthoBottom = -targetRadius / aspectRatio;
+            camera2D.orthoLeft = -targetRadius;
+            camera2D.orthoRight = targetRadius;
+            camera2D.orthoTop = targetRadius / aspectRatio;
+            camera2D.orthoBottom = -targetRadius / aspectRatio;
         }
     };
     
