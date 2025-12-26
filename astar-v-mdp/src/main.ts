@@ -40,7 +40,7 @@ const createScene = () => {
 
     // --- FX ---
     const glow = new GlowLayer("glow", scene);
-    glow.intensity = 0.2;
+    glow.intensity = 0.3;
 
     // --- Core Systems ---
     const gridSystem = new GridSystem(30, 30);

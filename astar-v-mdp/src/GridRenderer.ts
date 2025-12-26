@@ -5,6 +5,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import "@babylonjs/core/Meshes/thinInstanceMesh"; 
 
 /**
@@ -36,9 +37,48 @@ export class GridRenderer {
         tile.useVertexColors = true; 
         
         const material = new StandardMaterial("tileMat", this.scene);
-        // High emissive to allow vertex colors to drive the glow
+        
+        // Create Holographic Border Texture
+        const texture = new DynamicTexture("gridTex", { width: 128, height: 128 }, this.scene, false);
+        texture.hasAlpha = true;
+        const ctx = texture.getContext();
+        
+        // Clear (Transparent)
+        ctx.clearRect(0, 0, 128, 128);
+        
+        // Draw Border
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 15;
+        ctx.strokeRect(0, 0, 128, 128);
+        
+        // Optional: Fill center with very faint white for "glass" effect?
+        // ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+        // ctx.fillRect(0, 0, 128, 128);
+        
+        texture.update();
+
+        // Apply Texture
+        material.emissiveTexture = texture;
+        material.opacityTexture = texture;
+        material.diffuseColor = Color3.Black();
+        material.disableLighting = true; 
+        
+        // Use Vertex Colors to tint the Emissive Texture
+        // StandardMaterial multiplies EmissiveTexture * VertexColor if useVertexColors is true?
+        // Actually, for Emissive to be tinted by vertex color, we might need to rely on the fact that
+        // EmissiveColor is usually added.
+        // Let's set EmissiveColor to White (default multiplier) and let texture define pattern.
+        // Vertex Color usually tints Diffuse. For Emissive, we might need a custom shader or 
+        // rely on standard behavior.
+        // Babylon StandardMaterial: VertexColor multiplies Diffuse. 
+        // Does it multiply Emissive? 
+        // In newer versions yes if `useEmissiveAsIllumination`?
+        // Let's try simple setup: EmissiveColor = White.
+        // If Vertex Color doesn't tint emissive texture, everything will be white borders.
+        // We might need to map Vertex Color to Emissive Color manually in shader or use PBR.
+        // BUT: StandardMaterial VertexColor affects the final output.
         material.emissiveColor = Color3.White(); 
-        material.disableLighting = true; // Flat, glowing look
+
         tile.material = material;
         
         // Ensure bounding box covers all instances
@@ -116,7 +156,7 @@ export class GridRenderer {
                 r = 0.1; g = 0.1; b = 0.15; // Dark Metal
                 break;
             case CellType.Wind:
-                r = 1.0; g = 0.1; b = 0.1; // Neon Red
+                r = 0.0; g = 0.6; b = 1.0; // Neon Blue
                 break;
             case CellType.Goal:
                 r = 0.0; g = 1.0; b = 0.5; // Neon Green
@@ -129,14 +169,14 @@ export class GridRenderer {
                         r = 0.0; g = 1.0; b = 0.5; 
                     } else if (value > 0.1) {
                         // Visited
-                        r = 0.0; g = 0.2; b = 0.1; 
+                        r = 0.0; g = 0.3; b = 0.2; 
                     } else {
-                        // Unvisited
-                        r = 0.02; g = 0.02; b = 0.05; 
+                        // Unvisited - Default Light Blue Grid (Subtle)
+                        r = 0.05; g = 0.15; b = 0.25; 
                     }
                 } else {
-                    // MDP Mode - Standard floor
-                    r = 0.02; g = 0.02; b = 0.05;
+                    // MDP Mode - Default Light Blue Grid (Subtle)
+                    r = 0.05; g = 0.15; b = 0.25;
                 }
                 break;
         }
