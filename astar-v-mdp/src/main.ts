@@ -199,7 +199,7 @@ const createScene = () => {
             { id: 'wind', label: 'Wind', type: CellType.Wind },
             { id: 'erase', label: 'Erase', type: CellType.Empty },
             { id: 'inspect', label: 'Inspect', type: null },
-            { id: 'agent', label: 'Place Agent', type: null },
+            { id: 'agent', label: 'Place Cycle', type: null },
             { id: 'reset', label: 'Reset Grid', type: null }
         ];
 
