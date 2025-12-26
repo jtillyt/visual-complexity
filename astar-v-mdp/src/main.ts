@@ -343,13 +343,13 @@ const createScene = () => {
             <div style="color: #faa; margin-bottom: 5px;">Wind Settings:</div>
             <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                 <select id="wind-dir" style="background: #300; color: #faa; border: 1px solid #faa;">
-                    <option value="0,1">Up</option>
-                    <option value="1,0">Right</option>
-                    <option value="0,-1">Down</option>
-                    <option value="-1,0">Left</option>
+                    <option value="0,1">North</option>
+                    <option value="1,0">East</option>
+                    <option value="0,-1">South</option>
+                    <option value="-1,0">West</option>
                 </select>
                 <input id="wind-force" type="number" min="1" max="10" value="2" style="width: 50px; background: #300; color: #faa; border: 1px solid #faa;">
-                <span style="color: #faa; font-size: 12px;">blocks/s</span>
+                <span style="color: #faa; font-size: 12px;">blocks</span>
             </div>
         `;
         toolsSection.insertBefore(windControls, buttonsContainer);

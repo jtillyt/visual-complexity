@@ -135,10 +135,10 @@ export class GridSystem {
                 } else if (cell === CellType.Wind) {
                     const w = this.getWindConfig(x, y);
                     if (w) {
-                        let dir = "U";
-                        if (w.dx === 1) dir = "R";
-                        else if (w.dx === -1) dir = "L";
-                        else if (w.dy === -1) dir = "D";
+                        let dir = "N";
+                        if (w.dx === 1) dir = "E";
+                        else if (w.dx === -1) dir = "W";
+                        else if (w.dy === -1) dir = "S";
                         symbol = `W${dir}${w.force}`;
                     } else {
                         symbol = " W? "; // Error state
@@ -185,16 +185,16 @@ export class GridSystem {
                 } else if (token === ".") {
                     this.setCell(x, y, CellType.Empty);
                 } else if (token.startsWith("W")) {
-                    // Parse W[Dir][Force] e.g. WU2
+                    // Parse W[Dir][Force] e.g. WN2
                     const dirChar = token.charAt(1);
                     const forceChar = token.substring(2);
                     const force = parseInt(forceChar) || 2;
                     
                     let dx = 0, dy = 0;
-                    if (dirChar === 'U') dy = 1;
-                    else if (dirChar === 'D') dy = -1;
-                    else if (dirChar === 'L') dx = -1;
-                    else if (dirChar === 'R') dx = 1;
+                    if (dirChar === 'N') dy = 1;
+                    else if (dirChar === 'S') dy = -1;
+                    else if (dirChar === 'W') dx = -1;
+                    else if (dirChar === 'E') dx = 1;
                     
                     this.setCell(x, y, CellType.Wind);
                     this.setWindConfig(x, y, dx, dy, force);
