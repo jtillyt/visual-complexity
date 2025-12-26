@@ -196,7 +196,7 @@ export class Agent {
         const totalVz = vzCommand + vzWind;
 
         // 6. Integrate & Collision (Sliding with Radius)
-        const radius = 0.35;
+        const radius = 0.05;
         const epsilon = 0.001;
         
         // --- X Axis ---
