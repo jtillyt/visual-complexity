@@ -283,5 +283,11 @@ export class GridRenderer {
         this.colorsFloor[index * 4 + 2] = b;
         this.colorsFloor[index * 4 + 3] = a;
     }
+
+    public dispose(): void {
+        this.floorMesh.dispose();
+        this.wallMesh.dispose();
+        this.goalMesh.dispose();
+    }
 }
 

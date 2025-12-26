@@ -180,6 +180,11 @@ export class WindRenderer {
         this.dotMesh.thinInstanceSetBuffer("matrix", this.matricesParticles, 16, false);
         this.dotMesh.thinInstanceSetBuffer("color", this.colorsParticles, 4, false);
     }
+
+    public dispose(): void {
+        this.bladeMesh.dispose();
+        this.dotMesh.dispose();
+    }
 }
 
 

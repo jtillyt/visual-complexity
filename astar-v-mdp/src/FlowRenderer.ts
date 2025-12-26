@@ -210,4 +210,8 @@ export class FlowRenderer {
         this.arrowMesh.thinInstanceBufferUpdated("color");
         this.arrowMesh.thinInstanceBufferUpdated("matrix"); // Force update for visibility changes
     }
+
+    public dispose(): void {
+        this.arrowMesh.dispose();
+    }
 }

@@ -301,4 +301,11 @@ export class Agent {
         
         this.updateMeshPosition();
     }
+
+    public dispose(): void {
+        this.mesh.dispose();
+        if (this.trailMesh) {
+            this.trailMesh.dispose();
+        }
+    }
 }

@@ -43,22 +43,104 @@ const createScene = () => {
     const glow = new GlowLayer("glow", scene);
     glow.intensity = 0.3;
 
-    // --- Core Systems ---
-    const gridSystem = new GridSystem(30, 30);
-    // Expose for debugging
-    (window as any).gridSystem = gridSystem;
+    // --- Camera Setup ---
+    const center = new Vector3(15, 0, 15);
+    
+    // Single Orbit Camera
+    const camera = new ArcRotateCamera("camera", -Math.PI / 4, Math.PI / 4, 40, center, scene);
+    camera.lowerRadiusLimit = 10;
+    camera.upperRadiusLimit = 100;
+    camera.attachControl(canvas, true);
 
-    const gridRenderer = new GridRenderer(gridSystem, scene);
-    const flowRenderer = new FlowRenderer(gridSystem, scene);
-    const windRenderer = new WindRenderer(gridSystem, scene);
-    const explosionRenderer = new ExplosionRenderer(scene);
-    const agent = new Agent(gridSystem, scene, 0, 0);
+    const setCameraView = (mode: 'top' | 'iso') => {
+        if (mode === 'top') {
+            // Top-down view
+            camera.beta = 0.01; 
+            camera.alpha = -Math.PI / 2;
+        } else {
+            // Isometric view (Corner 45 deg)
+            camera.beta = Math.PI / 4;
+            camera.alpha = -Math.PI / 4;
+        }
+    };
 
-    // --- Solvers ---
-    const mdpSolver = new MdpSolver(gridSystem);
-    const aStarSolver = new AStarSolver(gridSystem);
-    let currentSolver: Solver = aStarSolver; // Default to A*
+    // --- Lighting & Environment ---
+    const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
+    light.intensity = 0.7;
+
+    // Invisible Ground for Picking (resized dynamically)
+    let ground = MeshBuilder.CreateGround("ground", { width: 30, height: 30 }, scene);
+    ground.position = new Vector3(15, 0, 15);
+    ground.visibility = 0; 
+    ground.isPickable = true;
+
+    // --- Core Systems State ---
+    let gridSystem: GridSystem;
+    let gridRenderer: GridRenderer;
+    let flowRenderer: FlowRenderer;
+    let windRenderer: WindRenderer;
+    let explosionRenderer: ExplosionRenderer;
+    let agent: Agent;
+    let mdpSolver: MdpSolver;
+    let aStarSolver: AStarSolver;
+    let currentSolver: Solver;
+    
+    // --- Interaction State ---
     let currentSolverType: 'mdp' | 'astar' = 'astar';
+    let isPainting = false;
+    let activeMode: 'wall' | 'wind' | 'goal' | 'erase' | 'agent' | 'inspect' = 'inspect';
+    let isSimulationRunning = false;
+    let agentStartPos = { x: 0, y: 0 };
+
+    // --- Game Lifecycle ---
+
+    const disposeGame = () => {
+        if (gridRenderer) gridRenderer.dispose();
+        if (flowRenderer) flowRenderer.dispose();
+        if (windRenderer) windRenderer.dispose();
+        if (agent) agent.dispose();
+        // Solvers and GridSystem are pure data, just let GC handle them.
+        // ExplosionRenderer is global FX, but we can clear it.
+    };
+
+    const initializeGame = (width: number, height: number) => {
+        disposeGame();
+
+        // 1. Grid & Math
+        gridSystem = new GridSystem(width, height);
+        (window as any).gridSystem = gridSystem; // Debug
+        
+        mdpSolver = new MdpSolver(gridSystem);
+        aStarSolver = new AStarSolver(gridSystem);
+        
+        // Restore solver selection
+        if (currentSolverType === 'mdp') currentSolver = mdpSolver;
+        else currentSolver = aStarSolver;
+
+        // 2. Renderers
+        gridRenderer = new GridRenderer(gridSystem, scene);
+        flowRenderer = new FlowRenderer(gridSystem, scene);
+        windRenderer = new WindRenderer(gridSystem, scene);
+        // explosionRenderer is persistent (scene-based), but we init it once below if needed.
+        if (!explosionRenderer) explosionRenderer = new ExplosionRenderer(scene);
+
+        agent = new Agent(gridSystem, scene, 0, 0);
+        agent.setMode(currentSolverType);
+
+        // 3. Camera & Picking Ground
+        const centerX = width / 2;
+        const centerZ = height / 2;
+        camera.setTarget(new Vector3(centerX, 0, centerZ));
+        
+        if (ground) ground.dispose();
+        ground = MeshBuilder.CreateGround("ground", { width: width, height: height }, scene);
+        ground.position = new Vector3(centerX, 0, centerZ);
+        ground.visibility = 0; 
+        ground.isPickable = true;
+    };
+
+    // Initial Setup
+    initializeGame(30, 30);
 
     // --- Render Loop Logic ---
     scene.onBeforeRenderObservable.add(() => {
@@ -99,30 +181,6 @@ const createScene = () => {
         }
     });
 
-    // --- Camera Setup ---
-    const center = new Vector3(15, 0, 15);
-    
-    // Single Orbit Camera
-    const camera = new ArcRotateCamera("camera", -Math.PI / 4, Math.PI / 4, 40, center, scene);
-    camera.lowerRadiusLimit = 10;
-    camera.upperRadiusLimit = 100;
-    camera.attachControl(canvas, true);
-
-    const setCameraView = (mode: 'top' | 'iso') => {
-        if (mode === 'top') {
-            // Top-down view
-            camera.beta = 0.01; 
-            camera.alpha = -Math.PI / 2;
-        } else {
-            // Isometric view (Corner 45 deg)
-            camera.beta = Math.PI / 4;
-            camera.alpha = -Math.PI / 4;
-        }
-    };
-    
-    // Initialize Iso (Camera is already init to this, but consistent fn call)
-    // setCameraView('iso'); 
-
     // --- Resize Handling ---
     const updateCameraProjection = () => {
         engine.resize();
@@ -133,21 +191,6 @@ const createScene = () => {
     }
     window.addEventListener('resize', updateCameraProjection);
 
-    // --- Lighting & Environment ---
-    const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
-    light.intensity = 0.7;
-
-    // Invisible Ground for Picking
-    const ground = MeshBuilder.CreateGround("ground", { width: 30, height: 30 }, scene);
-    ground.position = new Vector3(15, 0, 15);
-    ground.visibility = 0; 
-    ground.isPickable = true;
-
-    // --- Interaction State ---
-    let isPainting = false;
-    let activeMode: 'wall' | 'wind' | 'goal' | 'erase' | 'agent' | 'inspect' = 'inspect';
-    let isSimulationRunning = false;
-    let agentStartPos = { x: 0, y: 0 };
 
     // --- UI Construction ---
     const setupUI = () => {
@@ -159,9 +202,6 @@ const createScene = () => {
 
         // --- Top Bar (Play/Stop & Compass) ---
         // The Top Bar hosts the simulation controls.
-        // Logic:
-        // - "Run/Stop": Toggles the simulation loop. It acts as a Pause/Resume.
-        // - "Reset Agent": Manually moves the agent back to the start of the current run.
         const topBar = document.createElement('div');
         topBar.style.position = 'absolute';
         topBar.style.top = '0';
@@ -211,8 +251,6 @@ const createScene = () => {
         };
         
         // Reset Button:
-        // Explicitly handles "Try Again" functionality.
-        // It restores the agent to 'agentStartPos' which is captured when 'Run' is first clicked.
         const resetBtn = document.createElement('button');
         resetBtn.textContent = '↺ RESET AGENT';
         resetBtn.style.pointerEvents = 'auto';
@@ -302,21 +340,51 @@ const createScene = () => {
                 reader.onload = (evt) => {
                     const text = evt.target?.result as string;
                     if (text) {
-                        const startPos = gridSystem.deserialize(text);
-                        // Refresh Visuals
-                        gridRenderer.update();
-                        windRenderer.updateWindData(); // Re-read grid
-                        // Technically WindRenderer reads live in animate, but if it optimized? 
-                        // It reads live.
-                        
-                        if (startPos) {
-                            agent.setPosition(startPos.agentX, startPos.agentY);
-                            agentStartPos = { x: startPos.agentX, y: startPos.agentY };
-                        }
-                        
-                        // Stop simulation if running
-                        if (isSimulationRunning) {
-                            playBtn.click(); // Toggle off
+                        // Detect Dimension
+                        const lines = text.trim().split('\n');
+                        const h = lines.length;
+                        // Assuming square or rectangular, check first line
+                        // Line format: | . | . | . |
+                        // Split by | gives ["", " . ", " . ", " . ", ""] (length 5 for w=3)
+                        const firstLine = lines[0];
+                        const w = firstLine.split('|').length - 2;
+
+                        if (w > 0 && h > 0) {
+                             // Initialize new grid
+                             initializeGame(w, h);
+                             
+                             // Update Dropdown
+                             const gridSizeSelect = document.getElementById('grid-size-select') as HTMLSelectElement;
+                             if (gridSizeSelect) {
+                                 const sizeStr = `${w}x${h}`;
+                                 const option = Array.from(gridSizeSelect.options).find(o => o.value === sizeStr);
+                                 if (option) {
+                                     gridSizeSelect.value = sizeStr;
+                                 } else {
+                                     // Create custom option if not exists? Or set to blank/custom
+                                     // Prompt says: "show a blank in the drop-down"
+                                     gridSizeSelect.value = ""; 
+                                 }
+                             }
+
+                             // Deserialize
+                             const startPos = gridSystem.deserialize(text);
+                             
+                             // Refresh Visuals
+                             gridRenderer.update();
+                             windRenderer.updateWindData(); 
+                             
+                             if (startPos) {
+                                 agent.setPosition(startPos.agentX, startPos.agentY);
+                                 agentStartPos = { x: startPos.agentX, y: startPos.agentY };
+                             }
+                             
+                             // Stop simulation if running
+                             if (isSimulationRunning) {
+                                 playBtn.click(); // Toggle off
+                             }
+                        } else {
+                            alert("Invalid file format.");
                         }
                     }
                 };
@@ -328,6 +396,37 @@ const createScene = () => {
         ioDiv.appendChild(saveBtn);
         ioDiv.appendChild(loadBtn);
         toolsSection.appendChild(ioDiv);
+
+        // --- Grid Size Switcher ---
+        const gridSizeDiv = document.createElement('div');
+        gridSizeDiv.className = 'solver-switch';
+        gridSizeDiv.style.marginBottom = '5px';
+        gridSizeDiv.style.marginTop = '15px';
+        gridSizeDiv.style.display = 'flex';
+        gridSizeDiv.style.justifyContent = 'space-between';
+        gridSizeDiv.style.alignItems = 'center';
+        gridSizeDiv.innerHTML = `
+             <label style="color: white; font-family: monospace;">Grid Size:</label>
+             <select id="grid-size-select" style="background: #333; color: cyan; border: 1px solid cyan; padding: 2px;">
+                 <option value="" disabled hidden>Custom</option>
+                 <option value="10x10">10 x 10</option>
+                 <option value="20x20">20 x 20</option>
+                 <option value="30x30" selected>30 x 30</option>
+                 <option value="40x40">40 x 40</option>
+                 <option value="50x50">50 x 50</option>
+             </select>
+        `;
+        toolsSection.insertBefore(gridSizeDiv, buttonsContainer);
+
+        const gridSizeSelect = document.getElementById('grid-size-select') as HTMLSelectElement;
+        gridSizeSelect.onchange = (e) => {
+            const val = (e.target as HTMLSelectElement).value;
+            if (val) {
+                 const [w, h] = val.split('x').map(Number);
+                 if (isSimulationRunning) playBtn.click(); // Stop
+                 initializeGame(w, h);
+            }
+        };
 
         // 1. Solver Switcher
         const solverDiv = document.createElement('div');
