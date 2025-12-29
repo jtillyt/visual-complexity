@@ -21,11 +21,11 @@ export class MdpSolver implements Solver {
     private rewardStep: number = -0.1;
     private rewardWall: number = -1.0; // Penalty for hitting a wall
 
-    // Actions: 0: Up, 1: Right, 2: Down, 3: Left
+    // Actions: 0: North, 1: East, 2: South, 3: Left 
     private actions = [
-        { dx: 0, dy: 1, angle: Math.PI / 2 },    // Up
-        { dx: 1, dy: 0, angle: 0 },              // Right
-        { dx: 0, dy: -1, angle: -Math.PI / 2 },  // Down
+        { dx: 0, dy: 1, angle: Math.PI / 2 },    // North
+        { dx: 1, dy: 0, angle: 0 },              // East
+        { dx: 0, dy: -1, angle: -Math.PI / 2 },  // South
         { dx: -1, dy: 0, angle: Math.PI }        // Left
     ];
 

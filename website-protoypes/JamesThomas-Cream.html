@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>James Thomas | Engineering Journal</title>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,700;1,300&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* The "Academic Paper" Palette */
+    --paper-bg: #F9F7F1;
+    --ink-primary: #1A1A1A;
+    --ink-secondary: #555555;
+    --accent-blue: #003366; /* Deep Blueprint Blue */
+    --accent-highlight: #E8E4D9;
+    --border-color: #DCD6CC;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--paper-bg);
+    color: var(--ink-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Layout */
+  .container {
+    max-width: 740px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  /* Header: Clean & Minimal */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 80px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-decoration: none;
+    color: var(--ink-primary);
+  }
+
+  .brand-text {
+    font-family: 'Merriweather', serif;
+    font-weight: 700;
+    font-size: 1.25rem;
+    letter-spacing: -0.5px;
+  }
+  
+  .brand-text span {
+    color: var(--ink-secondary);
+    font-weight: 300;
+    font-style: italic;
+    font-size: 1rem;
+    margin-left: 6px;
+  }
+
+  /* The "Ink" Logo (No Neon) */
+  .logo-ink {
+    width: 42px;
+    height: 42px;
+  }
+
+  nav {
+    display: flex;
+    gap: 24px;
+  }
+
+  nav a {
+    text-decoration: none;
+    color: var(--ink-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  nav a:hover {
+    color: var(--accent-blue);
+  }
+
+  /* Typography */
+  h1 {
+    font-family: 'Merriweather', serif;
+    font-size: 2.5rem;
+    line-height: 1.3;
+    margin-bottom: 16px;
+    color: var(--ink-primary);
+  }
+
+  .subtitle {
+    font-size: 1.25rem;
+    color: var(--ink-secondary);
+    font-weight: 400;
+    margin-bottom: 40px;
+  }
+
+  .meta {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-blue);
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  p {
+    margin-bottom: 24px;
+    font-size: 1.05rem;
+  }
+
+  /* The "Lab Link" Card */
+  .lab-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    padding: 30px;
+    margin: 60px 0;
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .lab-card h3 {
+    margin: 0;
+    font-family: 'Merriweather', serif;
+    font-size: 1.2rem;
+  }
+
+  .btn-lab {
+    align-self: flex-start;
+    background-color: var(--accent-blue);
+    color: white;
+    text-decoration: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+  }
+
+  .btn-lab:hover {
+    background-color: #002244;
+  }
+
+</style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <a href="/" class="brand">
+        <svg class="logo-ink" viewBox="0 0 100 100">
+          <g transform="translate(10,10) scale(0.8)">
+            <path d="M45,5 L55,25 L35,30 L25,15 Z" fill="none" stroke="#003366" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M55,25 L70,35 L45,45 L35,30 Z" fill="none" stroke="#003366" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M45,45 L65,50 L55,70 L35,60 Z" fill="none" stroke="#003366" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M35,30 L15,35 L5,60 L35,60 Z" fill="none" stroke="#003366" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M55,70 L75,80 L95,90 L65,100 L40,85 Z" fill="none" stroke="#003366" stroke-width="3" stroke-linejoin="round"/>
+            <circle cx="60" cy="36" r="3" fill="#003366"/>
+          </g>
+        </svg>
+        <div class="brand-text">
+          James Thomas <span>// Dev</span>
+        </div>
+      </a>
+      <nav>
+        <a href="#">Essays</a>
+        <a href="#">Resume</a>
+        <a href="https://jaybirdlabs.com">The Lab ↗</a>
+      </nav>
+    </header>
+
+    <main>
+      <span class="meta">Featured Research</span>
+      <h1>Pathfinding Under Uncertainty: Why Robots Crash</h1>
+      <p class="subtitle">Moving beyond A* geometric perfection to probabilistic survival.</p>
+
+      <p>
+        In computer science curriculums, we are taught that A* (A-Star) is optimal. It finds the shortest path between two nodes in a graph. And in a digital vacuum—where motors never slip, sensors never drift, and wind doesn't exist—it is indeed perfect.
+      </p>
+
+      <p>
+        But when I tried to apply this logic to my latest robotics simulation, the results were catastrophic. The "optimal" path often skirted dangerous edges to save a few pixels of distance. In the real world, "optimal" is often synonymous with "risky."
+      </p>
+
+      <div class="lab-card">
+        <h3>See the Simulation</h3>
+        <p style="font-size: 0.95rem; margin-bottom: 0; color: var(--ink-secondary);">
+          I built a visual demonstration of this failure mode using WebGL and C#. You can watch the agent fail under A* logic and succeed using a Markov Decision Process (MDP).
+        </p>
+        <a href="https://jaybirdlabs.com/astar-mdp" class="btn-lab">Launch Experiment at Jaybird Labs &rarr;</a>
+      </div>
+
+      <p>
+        To solve this, we must abandon the idea of a "Path" and embrace the "Policy." By using a Markov Decision Process (MDP), we stop telling the robot <em>where to go</em> and start telling it <em>how to value its state</em>.
+      </p>
+    </main>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<style>
+  :root {
+    --neon-cyan: #00FFFF;
+    --neon-blue: #0057B8;
+    --neon-purple: #BD00FF;
+    --bg-dark: #050510;
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg-dark);
+    font-family: 'Segoe UI', monospace;
+    color: white;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* The Infinite Grid Floor */
+  .grid-floor {
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    background-image: 
+      linear-gradient(var(--bg-dark) 2px, transparent 2px),
+      linear-gradient(90deg, var(--bg-dark) 2px, transparent 2px);
+    background-size: 50px 50px;
+    background-color: rgba(0, 87, 184, 0.1);
+    transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+    animation: grid-move 20s linear infinite;
+    z-index: 0;
+  }
+
+  @keyframes grid-move {
+    0% { transform: perspective(500px) rotateX(60deg) translateY(0) translateZ(-200px); }
+    100% { transform: perspective(500px) rotateX(60deg) translateY(50px) translateZ(-200px); }
+  }
+
+  /* The Glass Card */
+  .card {
+    position: relative;
+    z-index: 10;
+    width: 400px;
+    padding: 40px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    box-shadow: 0 0 40px rgba(0, 87, 184, 0.2);
+    text-align: center;
+  }
+
+  h1 {
+    font-weight: 300;
+    letter-spacing: 4px;
+    margin: 0 0 10px 0;
+    text-transform: uppercase;
+    background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .role {
+    color: #aaa;
+    font-size: 0.9em;
+    margin-bottom: 30px;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 12px 30px;
+    background: transparent;
+    border: 1px solid var(--neon-cyan);
+    color: var(--neon-cyan);
+    text-decoration: none;
+    text-transform: uppercase;
+    font-size: 0.8em;
+    letter-spacing: 2px;
+    transition: 0.3s;
+    cursor: pointer;
+  }
+
+  .btn:hover {
+    background: var(--neon-cyan);
+    color: var(--bg-dark);
+    box-shadow: 0 0 20px var(--neon-cyan);
+  }
+
+  /* The Jaybird Logo Placeholder */
+  .logo-container {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto 20px;
+    position: relative;
+  }
+  
+  .bird-poly {
+    fill: none;
+    stroke: var(--neon-cyan);
+    stroke-width: 2;
+    filter: drop-shadow(0 0 5px var(--neon-cyan));
+  }
+</style>
+</head>
+<body>
+
+  <div class="grid-floor"></div>
+
+  <div class="card">
+    <div class="logo-container">
+      <svg viewBox="0 0 100 100">
+        <path class="bird-poly" d="M20,50 L40,30 L70,35 L90,50 L70,80 L30,70 Z M40,30 L50,10 L70,35 M70,35 L80,38 M30,70 L10,80 L20,50" />
+        <circle cx="65" cy="45" r="3" fill="#FF00FF" />
+      </svg>
+    </div>
+    <h1>Jaybird Labs</h1>
+    <div class="role">Physics // AI // Automation</div>
+    <p style="color: #ccc; font-size: 0.9rem; line-height: 1.6; margin-bottom: 30px;">
+      Simulating uncertainty in high-dimensional spaces. 
+      <br>Exploring the boundary between A* and Reality.
+    </p>
+    <a href="#" class="btn">Enter Lab</a>
+  </div>
+
+</body>
+</html>
