@@ -44,10 +44,10 @@ const createScene = () => {
     glow.intensity = 0.3;
 
     // --- Camera Setup ---
-    const center = new Vector3(15, 0, 15);
+    const center = new Vector3(15, -5, 15);
     
     // Single Orbit Camera
-    const camera = new ArcRotateCamera("camera", -Math.PI / 4, Math.PI / 4, 40, center, scene);
+    const camera = new ArcRotateCamera("camera", -Math.PI / 4, Math.PI / 4, 30, center, scene);
     camera.lowerRadiusLimit = 10;
     camera.upperRadiusLimit = 100;
     camera.attachControl(canvas, true);
@@ -69,7 +69,7 @@ const createScene = () => {
     light.intensity = 0.7;
 
     // Invisible Ground for Picking (resized dynamically)
-    let ground = MeshBuilder.CreateGround("ground", { width: 30, height: 30 }, scene);
+    let ground = MeshBuilder.CreateGround("ground", { width: 15, height: 15 }, scene);
     ground.position = new Vector3(15, 0, 15);
     ground.visibility = 0; 
     ground.isPickable = true;
@@ -114,15 +114,19 @@ const createScene = () => {
         aStarSolver = new AStarSolver(gridSystem);
         
         // Restore solver selection
-        if (currentSolverType === 'mdp') currentSolver = mdpSolver;
-        else currentSolver = aStarSolver;
+        if (currentSolverType === 'mdp') 
+            currentSolver = mdpSolver;
+        else 
+            currentSolver = aStarSolver;
 
         // 2. Renderers
         gridRenderer = new GridRenderer(gridSystem, scene);
         flowRenderer = new FlowRenderer(gridSystem, scene);
         windRenderer = new WindRenderer(gridSystem, scene);
+
         // explosionRenderer is persistent (scene-based), but we init it once below if needed.
-        if (!explosionRenderer) explosionRenderer = new ExplosionRenderer(scene);
+        if (!explosionRenderer) 
+            explosionRenderer = new ExplosionRenderer(scene);
 
         agent = new Agent(gridSystem, scene, 0, 0);
         agent.setMode(currentSolverType);
@@ -140,7 +144,7 @@ const createScene = () => {
     };
 
     // Initial Setup
-    initializeGame(30, 30);
+    initializeGame(15, 15);
 
     // --- Render Loop Logic ---
     scene.onBeforeRenderObservable.add(() => {
@@ -290,8 +294,8 @@ const createScene = () => {
         compass.style.border = '2px solid cyan';
         compass.style.background = 'rgba(0, 20, 40, 0.8)';
         compass.style.boxShadow = '0 0 10px cyan';
-        compass.style.marginRight = '20px'; // Offset from edge
-        compass.style.marginTop= '40px'; // Offset from top 
+        compass.style.marginRight = '0px'; // Offset from edge
+        compass.style.marginTop= '60px'; // Offset from top 
 
         const labelStyle = 'position: absolute; color: cyan; font-family: monospace; font-weight: bold; font-size: 12px;';
         compass.innerHTML = `
@@ -411,8 +415,9 @@ const createScene = () => {
              <select id="grid-size-select" style="background: #333; color: cyan; border: 1px solid cyan; padding: 2px;">
                  <option value="" disabled hidden>Custom</option>
                  <option value="10x10">10 x 10</option>
+                 <option value="15x15" selected>15 x 15</option>
                  <option value="20x20">20 x 20</option>
-                 <option value="30x30" selected>30 x 30</option>
+                 <option value="30x30">30 x 30</option>
                  <option value="40x40">40 x 40</option>
                  <option value="50x50">50 x 50</option>
              </select>
