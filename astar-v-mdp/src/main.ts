@@ -291,6 +291,7 @@ const createScene = () => {
         compass.style.background = 'rgba(0, 20, 40, 0.8)';
         compass.style.boxShadow = '0 0 10px cyan';
         compass.style.marginRight = '20px'; // Offset from edge
+        compass.style.marginTop= '40px'; // Offset from top 
 
         const labelStyle = 'position: absolute; color: cyan; font-family: monospace; font-weight: bold; font-size: 12px;';
         compass.innerHTML = `
