@@ -89,6 +89,37 @@ To maintain 60FPS with thousands of dynamic objects, this project utilizes **Bab
 ## 🎨 Visual Style
 "Cyberpunk Lab" / "Neon" aesthetic:
 -   Dark background for high contrast.
--   Neon Cyan for Policy / Intelligence.
--   Neon Blue (Pulsating) for Environmental Forces.
+-   Sky Aqua for Policy / Intelligence.
+-   Blue Energy (Pulsating) for Environmental Forces.
 -   Neon Green for Goals and High-Value zones.
+
+### Color Palette
+
+| Variable | Hex | Usage |
+| :--- | :--- | :--- |
+| **`--jay-bg-dark`** | `#0a0a12` | **Main Background.** Deep space black. |
+| **`--jay-panel-bg`** | `#141420` | **Panels/Cards.** Slightly lighter than background. |
+| **`--jay-accent-primary`** | `#4cc9f0` | **Sky Aqua.** Primary actions, active states, highlights. |
+| **`--jay-accent-secondary`** | `#b5179e` | **Raspberry Plum.** Secondary accents, data visualization. |
+| **`--jay-text-body`** | `#cfcfd1` | **Body Text.** Off-white for high readability on dark backgrounds. |
+| **`--jay-text-muted`** | `#6b6b7b` | **Meta Data.** Labels, footnotes, inactive states. |
+
+### Extended Palette
+
+These variables provide access to the full color palette for use in component-specific styles.
+- Found at https://coolors.co/f72585-b5179e-7209b7-560bad-480ca8-3a0ca3-3f37c9-4361ee-4895ef-4cc9f0
+
+| Variable | Hex | Name |
+| :--- | :--- | :--- |
+| `--jay-color-neon-pink` | `#f72585` | Neon Pink |
+| `--jay-color-raspberry-plum` | `#b5179e` | Raspberry Plum |
+| `--jay-color-indigo-bloom` | `#7209b7` | Indigo Bloom |
+| `--jay-color-ultrasonic-blue` | `#560bad` | Ultrasonic Blue |
+| `--jay-color-true-azure` | `#480ca8` | True Azure |
+| `--jay-color-vivid-royal` | `#3a0ca3` | Vivid Royal |
+| `--jay-color-bright-indigo` | `#3f37c9` | Bright Indigo |
+| `--jay-color-electric-sapphire` | `#4361ee` | Electric Sapphire |
+| `--jay-color-blue-energy` | `#4895ef` | Blue Energy |
+| `--jay-color-sky-aqua` | `#4cc9f0` | Sky Aqua |
+| `--jay-color-muted-yellow` | `#F4CB38` | Muted Yellow | 
+- Yellow added from color calculator using existing palette
