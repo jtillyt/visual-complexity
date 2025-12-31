@@ -133,7 +133,6 @@ const createScene = () => {
     };
 
     const resetAgent = (toInitial: boolean = true) => {
-        const wasRunning = isSimulationRunning;
         stopSimulation();
         
         // Determine target (Home vs Start of Run)

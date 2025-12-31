@@ -79,6 +79,43 @@ export class GridSystem {
         if (!this.isValid(x, y)) return undefined;
         return this.windConfigs.get(y * this.width + x);
     }
+
+    /**
+     * Identifies if a cell is influenced by a wind source (either as the source or in the stream).
+     * Returns the source configuration and location if found.
+     */
+    public getWindSourceForCell(x: number, y: number): { sourceX: number, sourceY: number, config: WindConfig } | undefined {
+        for (const [index, config] of this.windConfigs) {
+            const sx = index % this.width;
+            const sy = Math.floor(index / this.width);
+
+            // Check if (x,y) is the source
+            if (x === sx && y === sy) {
+                return { sourceX: sx, sourceY: sy, config };
+            }
+
+            // Check if (x,y) is in the stream
+            // The stream extends 'force' blocks in direction (dx, dy)
+            const dx = x - sx;
+            const dy = y - sy;
+            
+            // Check alignment
+            if (config.dx !== 0) {
+                if (dy !== 0) continue; // Not on the same row
+                const dist = dx / config.dx; // Calculate distance in units of dx
+                if (dist >= 1 && dist <= config.force) {
+                     return { sourceX: sx, sourceY: sy, config };
+                }
+            } else if (config.dy !== 0) {
+                if (dx !== 0) continue; // Not on the same col
+                const dist = dy / config.dy;
+                if (dist >= 1 && dist <= config.force) {
+                     return { sourceX: sx, sourceY: sy, config };
+                }
+            }
+        }
+        return undefined;
+    }
     
     /**
      * Returns the effective wind vector at the given cell.

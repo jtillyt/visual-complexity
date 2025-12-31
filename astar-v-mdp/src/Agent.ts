@@ -34,6 +34,9 @@ export class Agent {
     // Animation
     private propellers: Mesh[] = [];
     private trailMaterial: StandardMaterial;
+    
+    // Wind State
+    private windTarget: Vector3 | null = null;
 
     constructor(gridSystem: GridSystem, scene: Scene, startX: number, startY: number) {
         this.gridSystem = gridSystem;
@@ -159,8 +162,14 @@ export class Agent {
             const currentGridZ = Math.floor(this.position.z);
             
             if (currentGridX !== this.lastGridPos.x || currentGridZ !== this.lastGridPos.y) {
-                // Push point at ground height
-                this.visitedPath.push(new Vector3(currentGridX + 0.5, 0.03, currentGridZ + 0.5));
+                const lastCenter = new Vector3(this.lastGridPos.x + 0.5, 0.03, this.lastGridPos.y + 0.5);
+                
+                // Only add if it's not a duplicate of the last point (avoids start-of-run dupes)
+                const lastStored = this.visitedPath[this.visitedPath.length - 1];
+                if (!lastStored || !lastStored.equalsWithEpsilon(lastCenter, 0.001)) {
+                    this.visitedPath.push(lastCenter);
+                }
+                
                 this.lastGridPos = { x: currentGridX, y: currentGridZ };
             }
 
@@ -172,82 +181,91 @@ export class Agent {
             const vGridX = Math.floor(this.virtualPosition.x);
             const vGridZ = Math.floor(this.virtualPosition.z);
 
-            // --- Calculate Command Velocity (Intention) ---
+            // --- Calculate Command Velocity ---
             let vxCommand = 0;
             let vzCommand = 0;
-            
-            if (this.gridSystem.isValid(vGridX, vGridZ)) {
-                const cellType = this.gridSystem.getCell(vGridX, vGridZ);
-                if (cellType === CellType.Goal) {
-                    const targetX = vGridX + 0.5;
-                    const targetZ = vGridZ + 0.5;
-                    const dx = targetX - this.virtualPosition.x;
-                    const dz = targetZ - this.virtualPosition.z;
-                    const dist = Math.sqrt(dx * dx + dz * dz);
-                    
-                    if (dist > 0.05) {
-                        vxCommand = (dx / dist) * this.speed;
-                        vzCommand = (dz / dist) * this.speed;
-                    }
-                } else {
-                    const index = this.gridSystem.getFlatIndex(vGridX, vGridZ);
-                    const targetAngle = solver.policy[index];
-                    vxCommand = Math.cos(targetAngle) * this.speed;
-                    vzCommand = Math.sin(targetAngle) * this.speed;
 
-                    const centeringGain = 5.0; 
-                    const isHorizontal = Math.abs(vxCommand) > Math.abs(vzCommand);
-                    
-                    if (isHorizontal) {
-                        const targetZ = vGridZ + 0.5;
-                        const errorZ = targetZ - (this.mode === 'mdp' ? this.position.z : this.virtualPosition.z);
-                        vzCommand += errorZ * centeringGain;
-                    } else {
-                        const targetX = vGridX + 0.5;
-                        const errorX = targetX - (this.mode === 'mdp' ? this.position.x : this.virtualPosition.x);
-                        vxCommand += errorX * centeringGain;
-                    }
-                }
-            }
-
-            // --- Update Virtual Position ---
-            this.virtualPosition.x += vxCommand * deltaTime;
-            this.virtualPosition.z += vzCommand * deltaTime;
-
-            // --- Calculate Real Forces (Physics) ---
             const rGridX = Math.floor(this.position.x);
             const rGridZ = Math.floor(this.position.z);
-            
-            if (this.gridSystem.isValid(rGridX, rGridZ) && this.gridSystem.getCell(rGridX, rGridZ) === CellType.Goal) {
-                const targetX = rGridX + 0.5;
-                const targetZ = rGridZ + 0.5;
-                const dx = targetX - this.position.x;
-                const dz = targetZ - this.position.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
+
+            // 1. Check for Wind Trigger (if not already being blown)
+            if (!this.windTarget && this.gridSystem.isValid(rGridX, rGridZ)) {
+                // Check if we are in any wind stream (Source or Path)
+                const windSource = this.gridSystem.getWindSourceForCell(rGridX, rGridZ);
                 
-                if (dist < 0.05) {
-                    this.position.x = targetX;
-                    this.position.z = targetZ;
-                    this.isStopped = true;
-                    this.stopReason = 'goal';
+                if (windSource) {
+                     const { sourceX, sourceY, config } = windSource;
+                     // Calculate discrete target center at the end of the wind stream
+                     // Target = Source + Dir * Force
+                     const tx = sourceX + (config.dx * config.force);
+                     const ty = sourceY + (config.dy * config.force);
+                     
+                     // Only trigger if we aren't already at the target
+                     if (rGridX !== tx || rGridZ !== ty) {
+                         this.windTarget = new Vector3(tx + 0.5, this.position.y, ty + 0.5);
+                     }
                 }
             }
 
-            const windVec = this.gridSystem.getWindVector(rGridX, rGridZ);
-            let vxWind = 0;
-            let vzWind = 0;
-            
-            if (Math.abs(windVec.x) > 0.01 || Math.abs(windVec.y) > 0.01) {
-                const windMultiplier = 4.0;
-                vxWind = windVec.x * windMultiplier;
-                vzWind = windVec.y * windMultiplier;
-            } else {
-                vxWind += (Math.random() - 0.5) * 0.5;
-                vzWind += (Math.random() - 0.5) * 0.5;
-            }
+            if (this.windTarget) {
+                 // --- Wind Override Mode ---
+                 const dx = this.windTarget.x - this.position.x;
+                 const dz = this.windTarget.z - this.position.z;
+                 const dist = Math.sqrt(dx*dx + dz*dz);
+                 const windSpeed = this.speed * 2.5; 
+                 const step = windSpeed * deltaTime;
 
-            const totalVx = vxCommand + vxWind;
-            const totalVz = vzCommand + vzWind;
+                 if (dist < 0.05 || dist < step) {
+                     // Arrived at discrete block center (snap to avoid overshoot)
+                     this.position.x = this.windTarget.x;
+                     this.position.z = this.windTarget.z;
+                     this.windTarget = null;
+                     vxCommand = 0; 
+                     vzCommand = 0; 
+                 } else {
+                     vxCommand = (dx / dist) * windSpeed;
+                     vzCommand = (dz / dist) * windSpeed;
+                 }
+            } else {
+                // --- Normal Policy Mode ---
+                if (this.gridSystem.isValid(vGridX, vGridZ)) {
+                    const cellType = this.gridSystem.getCell(vGridX, vGridZ);
+                    if (cellType === CellType.Goal) {
+                        const targetX = vGridX + 0.5;
+                        const targetZ = vGridZ + 0.5;
+                        const dx = targetX - this.virtualPosition.x;
+                        const dz = targetZ - this.virtualPosition.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist > 0.05) {
+                            vxCommand = (dx / dist) * this.speed;
+                            vzCommand = (dz / dist) * this.speed;
+                        }
+                    } else {
+                        const index = this.gridSystem.getFlatIndex(vGridX, vGridZ);
+                        const targetAngle = solver.policy[index];
+                        vxCommand = Math.cos(targetAngle) * this.speed;
+                        vzCommand = Math.sin(targetAngle) * this.speed;
+
+                        const centeringGain = 5.0; 
+                        const isHorizontal = Math.abs(vxCommand) > Math.abs(vzCommand);
+                        
+                        if (isHorizontal) {
+                            const targetZ = vGridZ + 0.5;
+                            const errorZ = targetZ - (this.mode === 'mdp' ? this.position.z : this.virtualPosition.z);
+                            vzCommand += errorZ * centeringGain;
+                        } else {
+                            const targetX = vGridX + 0.5;
+                            const errorX = targetX - (this.mode === 'mdp' ? this.position.x : this.virtualPosition.x);
+                            vxCommand += errorX * centeringGain;
+                        }
+                    }
+                }
+            }
+            
+            // Note: Continuous wind noise removed as discrete wind takes precedence
+            const totalVx = vxCommand;
+            const totalVz = vzCommand;
 
             const radius = 0.05;
             const epsilon = 0.001;
@@ -333,6 +351,7 @@ export class Agent {
         
         this.isStopped = false;
         this.stopReason = 'none';
+        this.windTarget = null;
         this.lastGridPos = { x, y };
         
         this.visitedPath = [new Vector3(x + 0.5, 0.03, y + 0.5)];

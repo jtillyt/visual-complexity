@@ -1,5 +1,5 @@
 import {defineConfig} from "vite"
 
 export default defineConfig(({ command }) => ({
-    base: command === 'serve' ? '/' : "/visuals/astar-v-mdp/dist/"
+    base: './'
 }))
