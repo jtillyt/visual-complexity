@@ -154,8 +154,17 @@ export class GridSystem {
         }
     }
 
-    public serialize(agentX: number, agentY: number): string {
+    public serialize(agentX: number, agentY: number, cameraState?: { alpha: number, beta: number, radius: number, target: {x: number, y: number, z: number} }, displayName?: string): string {
         let output = "";
+        
+        if (displayName) {
+            output += `#NAME:${displayName}\n`;
+        }
+        
+        if (cameraState) {
+            output += `#CAMERA:${cameraState.alpha.toFixed(4)},${cameraState.beta.toFixed(4)},${cameraState.radius.toFixed(4)},${cameraState.target.x.toFixed(4)},${cameraState.target.y.toFixed(4)},${cameraState.target.z.toFixed(4)}\n`;
+        }
+
         // Iterate Top-Down (Visual Layout)
         for (let y = this.height - 1; y >= 0; y--) {
             output += "|";
@@ -189,19 +198,44 @@ export class GridSystem {
             }
             output += "\n";
         }
+
         return output;
     }
 
-    public deserialize(data: string): { agentX: number, agentY: number } | null {
+    public deserialize(data: string): { agentX: number, agentY: number, cameraState?: { alpha: number, beta: number, radius: number, target: {x: number, y: number, z: number} }, displayName?: string } | null {
         this.reset();
         let agentPos = null;
+        let cameraState = undefined;
+        let displayName = undefined;
 
         const lines = data.trim().split('\n');
+        
+        // Extract metadata first
+        const gridLines = lines.filter(l => {
+            if (l.startsWith('#NAME:')) {
+                displayName = l.substring(6).trim();
+                return false;
+            }
+            if (l.startsWith('#CAMERA:')) {
+                const parts = l.substring(8).split(',').map(parseFloat);
+                if (parts.length >= 6) {
+                    cameraState = {
+                        alpha: parts[0],
+                        beta: parts[1],
+                        radius: parts[2],
+                        target: { x: parts[3], y: parts[4], z: parts[5] }
+                    };
+                }
+                return false;
+            }
+            return true;
+        });
+
         // Parse Top-Down
         // Expected height lines
         
         let y = this.height - 1;
-        for (const line of lines) {
+        for (const line of gridLines) {
             if (y < 0) break;
             
             // Split by '|' and remove empty first/last
@@ -240,7 +274,11 @@ export class GridSystem {
             y--;
         }
         
-        return agentPos;
+        // Return object with optional metadata
+        if (agentPos) {
+            return { ...agentPos, cameraState, displayName };
+        }
+        return null;
     }
 
     /**

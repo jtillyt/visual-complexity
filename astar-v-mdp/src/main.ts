@@ -239,6 +239,13 @@ const createScene = () => {
         }
         
         explosionRenderer.update(engine.getDeltaTime() / 1000);
+
+        // Update Altitude
+        const altNeedle = document.getElementById('alt-needle');
+        if (altNeedle) {
+             const deg = (camera.beta * 180 / Math.PI) - 90;
+             altNeedle.style.transform = `rotate(${deg}deg)`;
+        }
         
         // Update Compass
         const compass = document.getElementById('compass-container');
@@ -322,11 +329,32 @@ const createScene = () => {
              <label style="color: var(--jay-text-muted); font-family: monospace; font-size: 11px; text-transform: uppercase;">Scenario</label>
              <select id="scenario-select" style="background: var(--jay-panel-bg); color: var(--jay-accent-primary); border: 1px solid var(--jay-accent-primary); padding: 8px; width: 100%; border-radius: 4px; font-size: 14px; cursor: pointer;">
                  <option value="" selected disabled>Select...</option>
-                 <option value="01_20_straight_no_wall_no_fan">Straight (Empty)</option>
-                 <option value="02_20_straight_wall_no_fan">Straight (Wall)</option>
-                 <option value="03_20_straight_wall_fan">Straight (Wind)</option>
              </select>
         `;
+
+        const knownScenarios = [
+            "01_20_straight_no_wall_no_fan",
+            "02_20_straight_wall_no_fan",
+            "03_20_straight_wall_fan"
+        ];
+        
+        const scenarioSel = scenarioDiv.querySelector('#scenario-select') as HTMLSelectElement;
+        
+        knownScenarios.forEach(async (filename) => {
+            try {
+                const res = await fetch(`scenarios/${filename}.txt`);
+                if (res.ok) {
+                    const txt = await res.text();
+                    const match = txt.match(/^#NAME:(.*)$/m);
+                    const displayName = match ? match[1].trim() : filename;
+                    
+                    const opt = document.createElement('option');
+                    opt.value = filename;
+                    opt.textContent = displayName;
+                    scenarioSel.appendChild(opt);
+                }
+            } catch (e) { console.error("Error loading scenario name:", e); }
+        });
         
         const solverDiv = document.createElement('div');
         solverDiv.style.flex = '1';
@@ -544,6 +572,14 @@ const createScene = () => {
                              agent.setPosition(startPos.agentX, startPos.agentY);
                              initialAgentStartPos = { x: startPos.agentX, y: startPos.agentY };
                              agentStartPos = { x: startPos.agentX, y: startPos.agentY };
+                             
+                             if (startPos.cameraState) {
+                                 const cs = startPos.cameraState;
+                                 camera.alpha = cs.alpha;
+                                 camera.beta = cs.beta;
+                                 camera.radius = cs.radius;
+                                 camera.setTarget(new Vector3(cs.target.x, cs.target.y, cs.target.z));
+                             }
                          }
                     }
                 } catch (err) { console.error(err); }
@@ -581,7 +617,16 @@ const createScene = () => {
         };
 
         saveBtn.onclick = () => {
-            const data = gridSystem.serialize(Math.floor(agent.position.x), Math.floor(agent.position.z));
+            const name = prompt("Enter scenario name:", "Custom Scenario");
+            if (name === null) return;
+
+            const cameraState = {
+                alpha: camera.alpha,
+                beta: camera.beta,
+                radius: camera.radius,
+                target: { x: camera.target.x, y: camera.target.y, z: camera.target.z }
+            };
+            const data = gridSystem.serialize(Math.floor(agent.position.x), Math.floor(agent.position.z), cameraState, name);
             const blob = new Blob([data], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -598,7 +643,7 @@ const createScene = () => {
                 reader.onload = (evt) => {
                     const text = evt.target?.result as string;
                     if (text) {
-                        const lines = text.trim().split('\n');
+                        const lines = text.trim().split('\n').filter(l => !l.startsWith('#'));
                         const h = lines.length;
                         const w = lines[0].split('|').length - 2;
                         if (w > 0 && h > 0) {
@@ -608,6 +653,14 @@ const createScene = () => {
                              if (startPos) {
                                  agent.setPosition(startPos.agentX, startPos.agentY);
                                  agentStartPos = { x: startPos.agentX, y: startPos.agentY };
+                                 
+                                 if (startPos.cameraState) {
+                                     const cs = startPos.cameraState;
+                                     camera.alpha = cs.alpha;
+                                     camera.beta = cs.beta;
+                                     camera.radius = cs.radius;
+                                     camera.setTarget(new Vector3(cs.target.x, cs.target.y, cs.target.z));
+                                 }
                              }
                              if (isSimulationRunning) playBtn.click();
                         }
@@ -654,6 +707,27 @@ const createScene = () => {
         topBar.style.width = '100%'; topBar.style.height = '60px';
         topBar.style.pointerEvents = 'none'; 
         
+        const labelStyle = 'position: absolute; color: var(--jay-accent-primary); font-family: monospace; font-weight: bold; font-size: 12px;';
+        
+        // Altitude Indicator
+        const altitude = document.createElement('div');
+        altitude.id = 'altitude-container';
+        altitude.style.width = '80px'; altitude.style.height = '80px';
+        altitude.style.position = 'absolute';
+        altitude.style.right = '110px'; altitude.style.top = '20px';
+        altitude.style.borderRadius = '50%';
+        altitude.style.border = '2px solid var(--jay-accent-primary)';
+        altitude.style.background = 'rgba(0, 20, 40, 0.8)';
+        altitude.style.boxShadow = '0 0 10px var(--jay-accent-primary)';
+        
+        altitude.innerHTML = `
+            <div style="${labelStyle} top: 5px; left: 50%; transform: translateX(-50%);">TOP</div>
+            <div style="${labelStyle} right: 5px; top: 50%; transform: translateY(-50%);">SIDE</div>
+            <div id="alt-needle" style="position: absolute; top: 50%; left: 50%; width: 35px; height: 2px; background: var(--jay-accent-primary); transform-origin: 0% 50%;"></div>
+            <div style="position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: var(--jay-accent-primary); transform: translate(-50%, -50%); border-radius: 50%;"></div>
+        `;
+        topBar.appendChild(altitude);
+
         const compass = document.createElement('div');
         compass.id = 'compass-container';
         compass.style.width = '80px'; compass.style.height = '80px';
@@ -664,7 +738,6 @@ const createScene = () => {
         compass.style.background = 'rgba(0, 20, 40, 0.8)';
         compass.style.boxShadow = '0 0 10px var(--jay-accent-primary)';
 
-        const labelStyle = 'position: absolute; color: var(--jay-accent-primary); font-family: monospace; font-weight: bold; font-size: 12px;';
         compass.innerHTML = `
             <div style="${labelStyle} top: 5px; left: 50%; transform: translateX(-50%);">N</div>
             <div style="${labelStyle} bottom: 5px; left: 50%; transform: translateX(-50%);">S</div>
