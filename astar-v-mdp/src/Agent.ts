@@ -42,11 +42,12 @@ export class Agent {
         this.virtualPosition = this.position.clone();
         
         this.lastGridPos = { x: startX, y: startY };
-        this.visitedPath.push(this.position.clone());
+        // Initial trail point at ground height
+        this.visitedPath = [new Vector3(startX + 0.5, 0.03, startY + 0.5)];
 
-        // Create persistent material for the trail
+        // Create persistent material for the trail (Tron Blue)
         this.trailMaterial = new StandardMaterial("trailMat", this.scene);
-        this.trailMaterial.emissiveColor = Color3.FromHexString("#4cc9f0"); // Sky Aqua
+        this.trailMaterial.emissiveColor = Color3.FromHexString("#4cc9f0"); 
         this.trailMaterial.disableLighting = true;
 
         this.mesh = this.createMesh();
@@ -137,7 +138,7 @@ export class Agent {
     }
 
     public update(deltaTime: number, solver: Solver, isRunning: boolean): void {
-        // Animate Props (Spin even if movement is stopped)
+        // --- 1. Animate Props (Always) ---
         this.propellers.forEach((p, i) => {
             const dir = i % 2 === 0 ? 1 : -1;
             const rotationSpeed = 30 * deltaTime * dir;
@@ -151,176 +152,144 @@ export class Agent {
             }
         });
 
-        if (!isRunning || this.isStopped) return;
+        // --- 2. Movement Logic (Only when running) ---
+        if (isRunning && !this.isStopped) {
+            // --- Trail History ---
+            const currentGridX = Math.floor(this.position.x);
+            const currentGridZ = Math.floor(this.position.z);
+            
+            if (currentGridX !== this.lastGridPos.x || currentGridZ !== this.lastGridPos.y) {
+                // Push point at ground height
+                this.visitedPath.push(new Vector3(currentGridX + 0.5, 0.03, currentGridZ + 0.5));
+                this.lastGridPos = { x: currentGridX, y: currentGridZ };
+            }
 
-        // --- 1. Trail Logic ---
-        const currentGridX = Math.floor(this.position.x);
-        const currentGridZ = Math.floor(this.position.z);
-        
-        if (currentGridX !== this.lastGridPos.x || currentGridZ !== this.lastGridPos.y) {
-            // Push point at same height as drone
-            this.visitedPath.push(new Vector3(currentGridX + 0.5, 0.4, currentGridZ + 0.5));
-            this.lastGridPos = { x: currentGridX, y: currentGridZ };
-        }
-        this.updateTrail();
+            // --- Determine Planning Position ---
+            if (this.mode === 'mdp') {
+                this.virtualPosition.copyFrom(this.position);
+            }
+            
+            const vGridX = Math.floor(this.virtualPosition.x);
+            const vGridZ = Math.floor(this.virtualPosition.z);
 
-        // --- 2. Determine Planning Position ---
-        if (this.mode === 'mdp') {
-            this.virtualPosition.copyFrom(this.position);
-        }
-        
-        // Use Virtual Position to query the Policy (Brain)
-        const vGridX = Math.floor(this.virtualPosition.x);
-        const vGridZ = Math.floor(this.virtualPosition.z);
-
-        // --- 3. Calculate Command Velocity (Intention) ---
-        let vxCommand = 0;
-        let vzCommand = 0;
-        
-        if (this.gridSystem.isValid(vGridX, vGridZ)) {
-            // Check Goal (Virtual Parking)
-            const cellType = this.gridSystem.getCell(vGridX, vGridZ);
-            if (cellType === CellType.Goal) {
-                 const targetX = vGridX + 0.5;
-                 const targetZ = vGridZ + 0.5;
-                 const dx = targetX - this.virtualPosition.x;
-                 const dz = targetZ - this.virtualPosition.z;
-                 const dist = Math.sqrt(dx * dx + dz * dz);
-                 
-                 if (dist > 0.05) {
-                     vxCommand = (dx / dist) * this.speed;
-                     vzCommand = (dz / dist) * this.speed;
-                 }
-                 // Else stop virtually
-            } else {
-                // Policy
-                const index = this.gridSystem.getFlatIndex(vGridX, vGridZ);
-                const targetAngle = solver.policy[index];
-                vxCommand = Math.cos(targetAngle) * this.speed;
-                vzCommand = Math.sin(targetAngle) * this.speed;
-
-                // --- Lane Centering Force ---
-                // Prevents the agent from grazing walls when moving through narrow gaps
-                // by nudging it toward the center of the current tile's path.
-                const centeringGain = 5.0; 
-                const isHorizontal = Math.abs(vxCommand) > Math.abs(vzCommand);
-                
-                if (isHorizontal) {
-                    // Nudge towards the vertical center of the row
-                    const targetZ = vGridZ + 0.5;
-                    const errorZ = targetZ - (this.mode === 'mdp' ? this.position.z : this.virtualPosition.z);
-                    vzCommand += errorZ * centeringGain;
-                } else {
-                    // Nudge towards the horizontal center of the column
+            // --- Calculate Command Velocity (Intention) ---
+            let vxCommand = 0;
+            let vzCommand = 0;
+            
+            if (this.gridSystem.isValid(vGridX, vGridZ)) {
+                const cellType = this.gridSystem.getCell(vGridX, vGridZ);
+                if (cellType === CellType.Goal) {
                     const targetX = vGridX + 0.5;
-                    const errorX = targetX - (this.mode === 'mdp' ? this.position.x : this.virtualPosition.x);
-                    vxCommand += errorX * centeringGain;
+                    const targetZ = vGridZ + 0.5;
+                    const dx = targetX - this.virtualPosition.x;
+                    const dz = targetZ - this.virtualPosition.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (dist > 0.05) {
+                        vxCommand = (dx / dist) * this.speed;
+                        vzCommand = (dz / dist) * this.speed;
+                    }
+                } else {
+                    const index = this.gridSystem.getFlatIndex(vGridX, vGridZ);
+                    const targetAngle = solver.policy[index];
+                    vxCommand = Math.cos(targetAngle) * this.speed;
+                    vzCommand = Math.sin(targetAngle) * this.speed;
+
+                    const centeringGain = 5.0; 
+                    const isHorizontal = Math.abs(vxCommand) > Math.abs(vzCommand);
+                    
+                    if (isHorizontal) {
+                        const targetZ = vGridZ + 0.5;
+                        const errorZ = targetZ - (this.mode === 'mdp' ? this.position.z : this.virtualPosition.z);
+                        vzCommand += errorZ * centeringGain;
+                    } else {
+                        const targetX = vGridX + 0.5;
+                        const errorX = targetX - (this.mode === 'mdp' ? this.position.x : this.virtualPosition.x);
+                        vxCommand += errorX * centeringGain;
+                    }
                 }
             }
-        }
-        // If invalid (out of bounds), command is 0, but physics continues to resolve collision with edge.
 
-        // --- 4. Update Virtual Position (Perfect Execution) ---
-        this.virtualPosition.x += vxCommand * deltaTime;
-        this.virtualPosition.z += vzCommand * deltaTime;
+            // --- Update Virtual Position ---
+            this.virtualPosition.x += vxCommand * deltaTime;
+            this.virtualPosition.z += vzCommand * deltaTime;
 
-        // --- 5. Calculate Real Forces (Physics) ---
-        const rGridX = Math.floor(this.position.x);
-        const rGridZ = Math.floor(this.position.z);
-        
-        // Check Goal (Real) - Stop Simulation
-        if (this.gridSystem.isValid(rGridX, rGridZ) && this.gridSystem.getCell(rGridX, rGridZ) === CellType.Goal) {
-             const targetX = rGridX + 0.5;
-             const targetZ = rGridZ + 0.5;
-             const dx = targetX - this.position.x;
-             const dz = targetZ - this.position.z;
-             const dist = Math.sqrt(dx * dx + dz * dz);
-             
-             if (dist < 0.05) {
-                 this.position.x = targetX;
-                 this.position.z = targetZ;
-                 this.updateMeshPosition();
-                 this.updateTrail();
-                 this.isStopped = true; // STOP SIMULATION
-                 this.stopReason = 'goal';
-                 return; 
-             }
-        }
-
-        const windVec = this.gridSystem.getWindVector(rGridX, rGridZ);
-        let vxWind = 0;
-        let vzWind = 0;
-        
-        if (Math.abs(windVec.x) > 0.01 || Math.abs(windVec.y) > 0.01) {
-            const windMultiplier = 4.0;
-            vxWind = windVec.x * windMultiplier;
-            vzWind = windVec.y * windMultiplier;
-        } else {
-            // Jitter
-            vxWind += (Math.random() - 0.5) * 0.5;
-            vzWind += (Math.random() - 0.5) * 0.5;
-        }
-
-        const totalVx = vxCommand + vxWind;
-        const totalVz = vzCommand + vzWind;
-
-        // 6. Integrate & Collision (Sliding with Radius)
-        const radius = 0.05;
-        const epsilon = 0.001;
-        
-        // --- X Axis ---
-        let nextX = this.position.x + totalVx * deltaTime;
-        let checkX = totalVx > 0 ? nextX + radius : nextX - radius;
-        let gridXCheck = Math.floor(checkX);
-        let gridZCheck = Math.floor(this.position.z);
-        
-        let colX = false;
-        if (this.gridSystem.isValid(gridXCheck, gridZCheck)) {
-            if (this.gridSystem.getCell(gridXCheck, gridZCheck) === CellType.Wall) {
-                colX = true;
+            // --- Calculate Real Forces (Physics) ---
+            const rGridX = Math.floor(this.position.x);
+            const rGridZ = Math.floor(this.position.z);
+            
+            if (this.gridSystem.isValid(rGridX, rGridZ) && this.gridSystem.getCell(rGridX, rGridZ) === CellType.Goal) {
+                const targetX = rGridX + 0.5;
+                const targetZ = rGridZ + 0.5;
+                const dx = targetX - this.position.x;
+                const dz = targetZ - this.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < 0.05) {
+                    this.position.x = targetX;
+                    this.position.z = targetZ;
+                    this.isStopped = true;
+                    this.stopReason = 'goal';
+                }
             }
-        } else {
-            colX = true; // Hit Edge
-        }
-        
-        if (colX) {
-            if (totalVx > 0) nextX = gridXCheck - radius - epsilon;
-            else nextX = gridXCheck + 1 + radius + epsilon;
-            this.isStopped = true; // Hit Wall/Edge
-            this.stopReason = 'wall';
-        }
-        this.position.x = nextX;
 
-        // --- Z Axis ---
-        let nextZ = this.position.z + totalVz * deltaTime;
-        let checkZ = totalVz > 0 ? nextZ + radius : nextZ - radius;
-        gridXCheck = Math.floor(this.position.x);
-        gridZCheck = Math.floor(checkZ);
-        
-        let colZ = false;
-        if (this.gridSystem.isValid(gridXCheck, gridZCheck)) {
-            if (this.gridSystem.getCell(gridXCheck, gridZCheck) === CellType.Wall) {
-                colZ = true;
+            const windVec = this.gridSystem.getWindVector(rGridX, rGridZ);
+            let vxWind = 0;
+            let vzWind = 0;
+            
+            if (Math.abs(windVec.x) > 0.01 || Math.abs(windVec.y) > 0.01) {
+                const windMultiplier = 4.0;
+                vxWind = windVec.x * windMultiplier;
+                vzWind = windVec.y * windMultiplier;
+            } else {
+                vxWind += (Math.random() - 0.5) * 0.5;
+                vzWind += (Math.random() - 0.5) * 0.5;
             }
-        } else {
-            colZ = true; // Hit Edge
-        }
-        
-        if (colZ) {
-            if (totalVz > 0) nextZ = gridZCheck - radius - epsilon;
-            else nextZ = gridZCheck + 1 + radius + epsilon;
-            this.isStopped = true; // Hit Wall/Edge
-            this.stopReason = 'wall';
-        }
-        this.position.z = nextZ;
 
+            const totalVx = vxCommand + vxWind;
+            const totalVz = vzCommand + vzWind;
+
+            const radius = 0.05;
+            const epsilon = 0.001;
+            
+            // --- X Axis Collision ---
+            let nextX = this.position.x + totalVx * deltaTime;
+            let checkX = totalVx > 0 ? nextX + radius : nextX - radius;
+            let gridXCheck = Math.floor(checkX);
+            let gridZCheck = Math.floor(this.position.z);
+            
+            if (!this.gridSystem.isValid(gridXCheck, gridZCheck) || this.gridSystem.getCell(gridXCheck, gridZCheck) === CellType.Wall) {
+                if (totalVx > 0) nextX = gridXCheck - radius - epsilon;
+                else nextX = gridXCheck + 1 + radius + epsilon;
+                this.isStopped = true;
+                this.stopReason = 'wall';
+            }
+            this.position.x = nextX;
+
+            // --- Z Axis Collision ---
+            let nextZ = this.position.z + totalVz * deltaTime;
+            let checkZ = totalVz > 0 ? nextZ + radius : nextZ - radius;
+            gridXCheck = Math.floor(this.position.x);
+            gridZCheck = Math.floor(checkZ);
+            
+            if (!this.gridSystem.isValid(gridXCheck, gridZCheck) || this.gridSystem.getCell(gridXCheck, gridZCheck) === CellType.Wall) {
+                if (totalVz > 0) nextZ = gridZCheck - radius - epsilon;
+                else nextZ = gridZCheck + 1 + radius + epsilon;
+                this.isStopped = true;
+                this.stopReason = 'wall';
+            }
+            this.position.z = nextZ;
+
+            // --- Rotation ---
+            if (Math.abs(totalVx) > 0.1 || Math.abs(totalVz) > 0.1) {
+                const targetPos = this.mesh.position.add(new Vector3(totalVx, 0, totalVz));
+                this.mesh.lookAt(targetPos);
+            }
+        }
+
+        // --- 3. Visual Updates (Always) ---
+        this.updateTrail();
         this.updateMeshPosition();
-        
-        // Rotation (Face Actual Movement)
-        if (Math.abs(totalVx) > 0.1 || Math.abs(totalVz) > 0.1) {
-            const targetPos = this.mesh.position.add(new Vector3(totalVx, 0, totalVz));
-            this.mesh.lookAt(targetPos);
-        }
     }
 
     private updateMeshPosition(): void {
@@ -330,15 +299,16 @@ export class Agent {
     private updateTrail(): void {
         if (this.visitedPath.length === 0) return;
         
-        // Construct points: History + Current Position
-        const points = [...this.visitedPath, this.position.clone()];
+        const livePos = this.position.clone();
+        livePos.y = 0.03; // Trail always on ground
+        const points = [...this.visitedPath, livePos];
         
         if (points.length < 2) return;
 
-        // Ensure last two points are not identical (CreateTube requirement)
-        const p1 = points[points.length - 2];
-        const p2 = points[points.length - 1];
-        if (Vector3.Distance(p1, p2) < 0.01) return;
+        // Ensure last two points are distinct enough for Babylon to render the tube
+        const pLast = points[points.length - 2];
+        const pCurr = points[points.length - 1];
+        if (Vector3.DistanceSquared(pLast, pCurr) < 0.0001) return;
 
         if (this.trailMesh) {
             this.trailMesh.dispose();
@@ -346,13 +316,14 @@ export class Agent {
         
         this.trailMesh = MeshBuilder.CreateTube("trail", {
             path: points,
-            radius: 0.05,
-            tessellation: 6,
+            radius: 0.08, // Thicker trail
+            tessellation: 8,
             cap: Mesh.NO_CAP,
             updatable: false 
         }, this.scene);
         
         this.trailMesh.material = this.trailMaterial;
+        this.trailMesh.isPickable = false;
     }
     
     public setPosition(x: number, y: number) {
@@ -364,7 +335,7 @@ export class Agent {
         this.stopReason = 'none';
         this.lastGridPos = { x, y };
         
-        this.visitedPath = [this.position.clone()];
+        this.visitedPath = [new Vector3(x + 0.5, 0.03, y + 0.5)];
         if (this.trailMesh) {
             this.trailMesh.dispose();
             this.trailMesh = null;

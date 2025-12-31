@@ -38,6 +38,8 @@ const createScene = () => {
     const scene = new Scene(engine);
     scene.clearColor = Color3.FromHexString("#0a0a12").toColor4(); // Deep Void Black
 
+    // --- FX ---
+
     // --- Camera Setup ---
     const center = new Vector3(15, -5, 15);
     
