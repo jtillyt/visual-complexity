@@ -86,10 +86,10 @@ export class FlowRenderer {
                 this.currentAngles[index] = 0;
                 this.targetAngles[index] = 0;
                 
-                // Default color (Cyan)
-                this.colors[index * 4 + 0] = 0;
-                this.colors[index * 4 + 1] = 1;
-                this.colors[index * 4 + 2] = 1;
+                // Default color (Sky Aqua)
+                this.colors[index * 4 + 0] = 0.3;
+                this.colors[index * 4 + 1] = 0.79;
+                this.colors[index * 4 + 2] = 0.94;
                 this.colors[index * 4 + 3] = 1;
 
                 this.updateMatrix(index, worldX, worldZ, 0, 1);
@@ -197,9 +197,13 @@ export class FlowRenderer {
             const val = values[i];
             const t = (val - minVal) / range; // 0 to 1
             
-            const r = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
-            const g = t > 0.5 ? 1 : t * 2;
-            const b = 0;
+            // Lerp from Raspberry Plum (Low) to Sky Aqua (High)
+            // Plum: 0.71, 0.09, 0.62
+            // Sky Aqua: 0.3, 0.79, 0.94
+            
+            const r = 0.71 + (0.3 - 0.71) * t;
+            const g = 0.09 + (0.79 - 0.09) * t;
+            const b = 0.62 + (0.94 - 0.62) * t;
 
             this.colors[i * 4 + 0] = r;
             this.colors[i * 4 + 1] = g;

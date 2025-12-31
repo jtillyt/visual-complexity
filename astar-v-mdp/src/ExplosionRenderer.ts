@@ -20,7 +20,7 @@ export class ExplosionRenderer {
     constructor(scene: Scene) {
         this.scene = scene;
         this.material = new StandardMaterial("explosionMat", scene);
-        this.material.emissiveColor = new Color3(1.0, 0.4, 0.0); // Neon Orange
+        this.material.emissiveColor = Color3.FromHexString("#f72585"); // Neon Pink
         this.material.disableLighting = true;
     }
 

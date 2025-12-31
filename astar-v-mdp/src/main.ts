@@ -37,11 +37,11 @@ const engine = new Engine(canvas, true);
 // Create Scene
 const createScene = () => {
     const scene = new Scene(engine);
-    scene.clearColor = new Color3(0.02, 0.02, 0.05).toColor4(); // Deep Void Black/Blue
+    scene.clearColor = Color3.FromHexString("#0a0a12").toColor4(); // Deep Void Black/Blue
 
     // --- FX ---
     const glow = new GlowLayer("glow", scene);
-    glow.intensity = 0.3;
+    glow.intensity = 0.2;
 
     // --- Camera Setup ---
     const center = new Vector3(15, -5, 15);
@@ -66,7 +66,7 @@ const createScene = () => {
 
     // --- Lighting & Environment ---
     const light = new HemisphericLight("light", new Vector3(0, 1, 0), scene);
-    light.intensity = 0.7;
+    light.intensity = 0.3;
 
     // Invisible Ground for Picking (resized dynamically)
     let ground = MeshBuilder.CreateGround("ground", { width: 15, height: 15 }, scene);
@@ -136,7 +136,9 @@ const createScene = () => {
         const centerZ = height / 2;
         camera.setTarget(new Vector3(centerX, 0, centerZ));
         
-        if (ground) ground.dispose();
+        if (ground) 
+            ground.dispose();
+
         ground = MeshBuilder.CreateGround("ground", { width: width, height: height }, scene);
         ground.position = new Vector3(centerX, 0, centerZ);
         ground.visibility = 0; 
@@ -157,10 +159,10 @@ const createScene = () => {
             gridRenderer.updateVisuals(values, currentSolverType);
         }
         
+        const dt = engine.getDeltaTime() / 1000;
+        agent.update(dt, currentSolver, isSimulationRunning);
+
         if (isSimulationRunning) {
-            const dt = engine.getDeltaTime() / 1000;
-            agent.update(dt, currentSolver);
-            
             // Check if agent stopped (Collision/Goal/Edge)
             if (agent.isStopped) {
                 if (agent.stopReason === 'wall') {
@@ -239,9 +241,13 @@ const createScene = () => {
             isSimulationRunning = !isSimulationRunning;
             if (isSimulationRunning) {
                 playBtn.textContent = '⏹ STOP';
-                playBtn.style.borderColor = '#f00';
-                playBtn.style.color = '#f00';
+                playBtn.style.borderColor = '#f72585';
+                playBtn.style.color = '#f72585';
                 
+                // Ensure agent is free to move
+                agent.isStopped = false;
+                agent.stopReason = 'none';
+
                 // Store start pos for Reset button
                 agentStartPos = { x: Math.floor(agent.position.x), y: Math.floor(agent.position.z) };
                 
@@ -259,8 +265,8 @@ const createScene = () => {
         resetBtn.textContent = '↺ RESET AGENT';
         resetBtn.style.pointerEvents = 'auto';
         resetBtn.style.background = 'rgba(0, 20, 40, 0.8)';
-        resetBtn.style.border = '2px solid cyan';
-        resetBtn.style.color = 'cyan';
+        resetBtn.style.borderColor = '#4cc9f0';
+        resetBtn.style.color = '#4cc9f0';
         resetBtn.style.padding = '10px 20px';
         resetBtn.style.fontFamily = 'monospace';
         resetBtn.style.fontSize = '16px';
@@ -291,19 +297,19 @@ const createScene = () => {
         compass.style.height = '80px';
         compass.style.position = 'relative';
         compass.style.borderRadius = '50%';
-        compass.style.border = '2px solid cyan';
+        compass.style.border = '2px solid #4cc9f0';
         compass.style.background = 'rgba(0, 20, 40, 0.8)';
-        compass.style.boxShadow = '0 0 10px cyan';
+        compass.style.boxShadow = '0 0 10px #4cc9f0';
         compass.style.marginRight = '0px'; // Offset from edge
         compass.style.marginTop= '60px'; // Offset from top 
 
-        const labelStyle = 'position: absolute; color: cyan; font-family: monospace; font-weight: bold; font-size: 12px;';
+        const labelStyle = 'position: absolute; color: #4cc9f0; font-family: monospace; font-weight: bold; font-size: 12px;';
         compass.innerHTML = `
             <div style="${labelStyle} top: 5px; left: 50%; transform: translateX(-50%);">N</div>
             <div style="${labelStyle} bottom: 5px; left: 50%; transform: translateX(-50%);">S</div>
             <div style="${labelStyle} left: 5px; top: 50%; transform: translateY(-50%);">W</div>
             <div style="${labelStyle} right: 5px; top: 50%; transform: translateY(-50%);">E</div>
-            <div style="position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: cyan; transform: translate(-50%, -50%); border-radius: 50%;"></div>
+            <div style="position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: #4cc9f0; transform: translate(-50%, -50%); border-radius: 50%;"></div>
         `;
         topBar.appendChild(compass);
 
@@ -412,7 +418,7 @@ const createScene = () => {
         gridSizeDiv.style.alignItems = 'center';
         gridSizeDiv.innerHTML = `
              <label style="color: white; font-family: monospace;">Grid Size:</label>
-             <select id="grid-size-select" style="background: #333; color: cyan; border: 1px solid cyan; padding: 2px;">
+             <select id="grid-size-select" style="background: #141420; color: #4cc9f0; border: 1px solid #4cc9f0; padding: 2px;">
                  <option value="" disabled hidden>Custom</option>
                  <option value="10x10">10 x 10</option>
                  <option value="15x15" selected>15 x 15</option>
@@ -443,7 +449,7 @@ const createScene = () => {
         scenarioDiv.style.alignItems = 'center';
         scenarioDiv.innerHTML = `
              <label style="color: white; font-family: monospace;">Scenario:</label>
-             <select id="scenario-select" style="background: #333; color: cyan; border: 1px solid cyan; padding: 2px;">
+             <select id="scenario-select" style="background: #141420; color: #4cc9f0; border: 1px solid #4cc9f0; padding: 2px;">
                  <option value="" selected disabled>Select...</option>
                  <option value="01_20_straight_no_wall_no_fan">Straight (Empty)</option>
                  <option value="02_20_straight_wall_no_fan">Straight (Wall)</option>
@@ -504,7 +510,7 @@ const createScene = () => {
         solverDiv.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <label style="color: white; font-family: monospace;">Algorithm:</label>
-                <select id="solver-select" style="background: #333; color: cyan; border: 1px solid cyan; padding: 2px;">
+                <select id="solver-select" style="background: #141420; color: #4cc9f0; border: 1px solid #4cc9f0; padding: 2px;">
                     <option value="astar" selected>A* (Deterministic)</option>
                     <option value="mdp">MDP (Probabilistic)</option>
                 </select>
@@ -512,8 +518,8 @@ const createScene = () => {
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <label style="color: white; font-family: monospace;">View:</label>
                 <div style="display: flex; gap: 5px;">
-                    <button id="btn-view-iso" style="background: #333; color: lime; border: 1px solid lime; cursor: pointer; padding: 2px 6px;">Angled</button>
-                    <button id="btn-view-top" style="background: #333; color: lime; border: 1px solid lime; cursor: pointer; padding: 2px 6px;">Top</button>
+                    <button id="btn-view-iso" style="background: #141420; color: #4cc9f0; border: 1px solid #4cc9f0; cursor: pointer; padding: 2px 6px;">Angled</button>
+                    <button id="btn-view-top" style="background: #141420; color: #4cc9f0; border: 1px solid #4cc9f0; cursor: pointer; padding: 2px 6px;">Top</button>
                 </div>
             </div>
         `;
@@ -549,18 +555,18 @@ const createScene = () => {
         windControls.style.marginTop = '10px';
         windControls.style.marginBottom = '10px';
         windControls.style.padding = '5px';
-        windControls.style.border = '1px dashed red';
+        windControls.style.border = '1px dashed #b5179e';
         windControls.innerHTML = `
-            <div style="color: #faa; margin-bottom: 5px;">Wind Settings:</div>
+            <div style="color: #b5179e; margin-bottom: 5px;">Wind Settings:</div>
             <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                <select id="wind-dir" style="background: #300; color: #faa; border: 1px solid #faa;">
+                <select id="wind-dir" style="background: #0a0a12; color: #b5179e; border: 1px solid #b5179e;">
                     <option value="0,1">North</option>
                     <option value="1,0">East</option>
                     <option value="0,-1">South</option>
                     <option value="-1,0">West</option>
                 </select>
-                <input id="wind-force" type="number" min="1" max="10" value="2" style="width: 50px; background: #300; color: #faa; border: 1px solid #faa;">
-                <span style="color: #faa; font-size: 12px;">blocks</span>
+                <input id="wind-force" type="number" min="1" max="10" value="2" style="width: 50px; background: #0a0a12; color: #b5179e; border: 1px solid #b5179e;">
+                <span style="color: #b5179e; font-size: 12px;">blocks</span>
             </div>
         `;
         toolsSection.insertBefore(windControls, buttonsContainer);
@@ -583,8 +589,8 @@ const createScene = () => {
             btn.dataset.mode = tool.id;
             
             if (tool.id === 'reset') {
-                btn.style.borderColor = '#d55';
-                btn.style.color = '#eaa';
+                btn.style.borderColor = '#f72585';
+                btn.style.color = '#f72585';
                 btn.onclick = () => {
                      if (confirm('Reset the entire grid?')) {
                          gridSystem.reset();
@@ -639,7 +645,7 @@ const createScene = () => {
         cellInfoEl.innerHTML = `
             <div class="info-row"><span>Coordinates:</span> <span class="value">(${x}, ${y})</span></div>
             <div class="info-row"><span>Type:</span> <span class="value">${typeStr}</span></div>
-            ${extraInfo ? `<div class="info-row" style="color:#faa; font-size:0.8em;">${extraInfo}</div>` : ''}
+            ${extraInfo ? `<div class="info-row" style="color:#b5179e; font-size:0.8em;">${extraInfo}</div>` : ''}
             <div class="info-row"><span>Value:</span> <span class="value">${value}</span></div>
             <div class="info-row"><span>Policy (rad):</span> <span class="value">${policyAngle}</span></div>
         `;
@@ -743,6 +749,7 @@ const createScene = () => {
         if (!point) return;
         const x = Math.floor(point.x);
         const y = Math.floor(point.z);
+        
         if (gridSystem.isValid(x, y)) {
             agent.setPosition(x, y);
         }

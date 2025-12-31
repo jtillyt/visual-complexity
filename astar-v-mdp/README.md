@@ -47,7 +47,7 @@ This visualization demonstrates the core difference between pathfinding and poli
 
 ### The Invisible Trap (Wind)
 Unlike Walls, **Wind is ignored during the pre-planning phase** for both algorithms (Cost = 1, same as empty). This creates a "Trap" scenario:
--   The **A* Solver** chooses the direct line through the wind, assuming it can move perfectly. Once it hits the wind, it is blown off course and must constantly recalculate.
+-   The **A* Solver** calculates a direct line without consideration of any wind. Once it hits the wind, it is blown off course and continues on its preprogrammed route without a way to recover.
 -   The **MDP Solver** (in its current configuration) also plans through the wind but demonstrates how a global policy field allows for immediate correction even when pushed far from the "optimal" path.
 
 ### Visual Representation

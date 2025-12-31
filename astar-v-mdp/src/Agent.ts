@@ -30,11 +30,14 @@ export class Agent {
     private visitedPath: Vector3[] = [];
     private trailMesh: Mesh | null = null;
     private lastGridPos: { x: number, y: number } = { x: -1, y: -1 };
+    
+    // Animation
+    private propellers: Mesh[] = [];
 
     constructor(gridSystem: GridSystem, scene: Scene, startX: number, startY: number) {
         this.gridSystem = gridSystem;
         this.scene = scene;
-        this.position = new Vector3(startX + 0.5, 0.2, startY + 0.5); 
+        this.position = new Vector3(startX + 0.5, 0.4, startY + 0.5); // Fly higher (0.4)
         this.virtualPosition = this.position.clone();
         
         this.lastGridPos = { x: startX, y: startY };
@@ -55,53 +58,94 @@ export class Agent {
     private createMesh(): Mesh {
         // --- Materials ---
         const bodyMat = new StandardMaterial("bodyMat", this.scene);
-        bodyMat.diffuseColor = new Color3(0.1, 0.1, 0.1); 
+        bodyMat.diffuseColor = Color3.FromHexString("#F4CB38"); // Muted Yellow
+        bodyMat.emissiveColor = Color3.FromHexString("#F4CB38").scale(0.2); 
         bodyMat.specularColor = new Color3(0.5, 0.5, 0.5);
         
         const glowMat = new StandardMaterial("glowMat", this.scene);
-        glowMat.emissiveColor = new Color3(0.0, 1.0, 1.0); 
+        glowMat.emissiveColor = Color3.FromHexString("#4cc9f0"); 
         glowMat.disableLighting = true;
 
+        const propMat = new StandardMaterial("propMat", this.scene);
+        propMat.diffuseColor = Color3.FromHexString("#444444");
+        propMat.emissiveColor = Color3.FromHexString("#4cc9f0").scale(0.3); // Dim glow
+
         // --- Geometry ---
-        // 1. Main Body (Chassis) - Scaled to fill .75
-        const body = MeshBuilder.CreateBox("body", { width: 0.4, height: 0.2, depth: 0.75 }, this.scene);
-        body.position.y = 0.2;
+        // 1. Central Body
+        const body = MeshBuilder.CreateBox("body", { width: 0.25, height: 0.15, depth: 0.35 }, this.scene);
         body.material = bodyMat;
 
-        // 2. Wheels (Glowing Rings)
-        const wheelOptions = { diameter: 0.4, thickness: 0.08, tessellation: 32 };
-        
-        const rearWheel = MeshBuilder.CreateTorus("rearWheel", wheelOptions, this.scene);
-        rearWheel.rotation.y = Math.PI / 2; 
-        rearWheel.position.z = -0.3; 
-        rearWheel.position.y = 0.2;
-        rearWheel.material = glowMat;
+        // 2. Arms (X-Shape)
+        const arm1 = MeshBuilder.CreateBox("arm1", { width: 0.8, height: 0.04, depth: 0.08 }, this.scene);
+        arm1.rotation.y = Math.PI / 4;
+        arm1.material = bodyMat;
 
-        const frontWheel = MeshBuilder.CreateTorus("frontWheel", wheelOptions, this.scene);
-        frontWheel.rotation.y = Math.PI / 2;
-        frontWheel.position.z = 0.3; 
-        frontWheel.position.y = 0.2;
-        frontWheel.material = glowMat;
-        
-        // 3. Light Strips
-        const stripLeft = MeshBuilder.CreateBox("stripL", { width: 0.03, height: 0.03, depth: 0.5 }, this.scene);
-        stripLeft.position.x = -0.2;
-        stripLeft.position.y = 0.2;
-        stripLeft.material = glowMat;
+        const arm2 = MeshBuilder.CreateBox("arm2", { width: 0.8, height: 0.04, depth: 0.08 }, this.scene);
+        arm2.rotation.y = -Math.PI / 4;
+        arm2.material = bodyMat;
 
-        const stripRight = MeshBuilder.CreateBox("stripR", { width: 0.03, height: 0.03, depth: 0.5 }, this.scene);
-        stripRight.position.x = 0.2;
-        stripRight.position.y = 0.2;
-        stripRight.material = glowMat;
+        // 3. Propellers & Motors
+        this.propellers = [];
+        const propOffsets = [
+            new Vector3(0.28, 0.05, 0.28),   // FL
+            new Vector3(-0.28, 0.05, 0.28),  // FR
+            new Vector3(0.28, 0.05, -0.28),  // BL
+            new Vector3(-0.28, 0.05, -0.28)  // BR
+        ];
 
-        const vehicle = Mesh.MergeMeshes([body, rearWheel, frontWheel, stripLeft, stripRight], true, true, undefined, false, true)!;
-        vehicle.name = "agentCycle";
+        const motors: Mesh[] = [];
+        propOffsets.forEach((offset, i) => {
+             // Motor
+             const motor = MeshBuilder.CreateCylinder("motor"+i, { height: 0.1, diameter: 0.1 }, this.scene);
+             motor.position.copyFrom(offset);
+             motor.position.y -= 0.02;
+             motor.material = bodyMat;
+             motors.push(motor);
+
+             // Prop Blade
+             const prop = MeshBuilder.CreateBox("prop"+i, { width: 0.35, height: 0.01, depth: 0.04 }, this.scene);
+             prop.position.copyFrom(offset);
+             prop.position.y += 0.05; // Sit on top of motor
+             prop.material = propMat;
+             this.propellers.push(prop);
+        });
+
+        // 4. Direction Indicator (Eye/Cone at front)
+        // Drone faces +Z (local). 
+        const eye = MeshBuilder.CreateBox("eye", { width: 0.15, height: 0.05, depth: 0.05 }, this.scene);
+        eye.position.z = 0.18; // Front face
+        eye.position.y = 0.02;
+        eye.material = glowMat;
+
+        // Merge static parts (Body, Arms, Motors, Eye)
+        const staticParts = [body, arm1, arm2, eye, ...motors];
+        const chassis = Mesh.MergeMeshes(staticParts, true, true, undefined, false, true)!;
         
-        return vehicle;
+        // Parent propellers to chassis
+        chassis.name = "droneChassis";
+        this.propellers.forEach(p => {
+            p.parent = chassis;
+        });
+
+        return chassis;
     }
 
-    public update(deltaTime: number, solver: Solver): void {
-        if (this.isStopped) return;
+    public update(deltaTime: number, solver: Solver, isRunning: boolean): void {
+        // Animate Props (Spin even if movement is stopped)
+        this.propellers.forEach((p, i) => {
+            const dir = i % 2 === 0 ? 1 : -1;
+            const rotationSpeed = 30 * deltaTime * dir;
+            
+            if (p.rotationQuaternion) {
+                const euler = p.rotationQuaternion.toEulerAngles();
+                euler.y += rotationSpeed;
+                p.rotationQuaternion.copyFrom(euler.toQuaternion());
+            } else {
+                p.rotation.y += rotationSpeed;
+            }
+        });
+
+        if (!isRunning || this.isStopped) return;
 
         // --- 1. Trail Logic ---
         const currentGridX = Math.floor(this.position.x);
@@ -279,7 +323,7 @@ export class Agent {
         }, this.scene);
         
         const mat = new StandardMaterial("trailMat", this.scene);
-        mat.emissiveColor = new Color3(0.0, 1.0, 1.0); // Cyan
+        mat.emissiveColor = Color3.FromHexString("#4cc9f0"); // Sky Aqua
         mat.disableLighting = true;
         this.trailMesh.material = mat;
     }
