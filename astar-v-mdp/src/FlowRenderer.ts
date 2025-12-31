@@ -53,13 +53,17 @@ export class FlowRenderer {
 
     private createArrowMesh(): Mesh {
         // Create a simple arrow pointing along +X (Right) as the default (Angle 0)
-        const shaft = MeshBuilder.CreateCylinder("shaft", { height: 0.4, diameter: 0.05 }, this.scene);
+        // Total length = 1.0 (Center of one cell to center of next)
+        const shaftHeight = 0.7;
+        const headHeight = 0.3;
+        
+        const shaft = MeshBuilder.CreateCylinder("shaft", { height: shaftHeight, diameter: 0.08 }, this.scene);
         shaft.rotation.z = -Math.PI / 2; // Rotate from Y to X
-        shaft.position.x = 0.2;
+        shaft.position.x = shaftHeight / 2; // Origin at 0, extends to 0.7
 
-        const head = MeshBuilder.CreateCylinder("head", { height: 0.2, diameterTop: 0, diameterBottom: 0.15 }, this.scene);
+        const head = MeshBuilder.CreateCylinder("head", { height: headHeight, diameterTop: 0, diameterBottom: 0.25 }, this.scene);
         head.rotation.z = -Math.PI / 2; // Rotate from Y to X
-        head.position.x = 0.5;
+        head.position.x = shaftHeight + (headHeight / 2); // Origin at 0.7, extends to 1.0
 
         const arrow = Mesh.MergeMeshes([shaft, head], true, true, undefined, false, true)!;
         arrow.name = "policyArrow";

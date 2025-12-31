@@ -23,7 +23,7 @@ export class Agent {
     public isStopped: boolean = false;
     public stopReason: 'none' | 'wall' | 'goal' | 'user' = 'none';
     
-    private speed: number = 8.0;
+    private speed: number = 7.0;
     private mode: 'astar' | 'mdp' = 'astar';
     
     // Trail
@@ -191,6 +191,24 @@ export class Agent {
                 const targetAngle = solver.policy[index];
                 vxCommand = Math.cos(targetAngle) * this.speed;
                 vzCommand = Math.sin(targetAngle) * this.speed;
+
+                // --- Lane Centering Force ---
+                // Prevents the agent from grazing walls when moving through narrow gaps
+                // by nudging it toward the center of the current tile's path.
+                const centeringGain = 5.0; 
+                const isHorizontal = Math.abs(vxCommand) > Math.abs(vzCommand);
+                
+                if (isHorizontal) {
+                    // Nudge towards the vertical center of the row
+                    const targetZ = vGridZ + 0.5;
+                    const errorZ = targetZ - (this.mode === 'mdp' ? this.position.z : this.virtualPosition.z);
+                    vzCommand += errorZ * centeringGain;
+                } else {
+                    // Nudge towards the horizontal center of the column
+                    const targetX = vGridX + 0.5;
+                    const errorX = targetX - (this.mode === 'mdp' ? this.position.x : this.virtualPosition.x);
+                    vxCommand += errorX * centeringGain;
+                }
             }
         }
         // If invalid (out of bounds), command is 0, but physics continues to resolve collision with edge.
