@@ -85,7 +85,77 @@ const createScene = () => {
     let isPainting = false;
     let activeMode: 'wall' | 'wind' | 'goal' | 'erase' | 'agent' | 'inspect' = 'inspect';
     let isSimulationRunning = false;
-    let agentStartPos = { x: 0, y: 0 };
+    let initialAgentStartPos = { x: 0, y: 0 }; // The "True" Home position (Placement/Scenario)
+    let agentStartPos = { x: 0, y: 0 };        // The start position of the most recent run
+
+    // --- Simulation Controllers ---
+
+    const startSimulation = () => {
+        if (isSimulationRunning) return;
+
+        if (agent.isStopped) {
+            // Automatically reset to the start of the current RUN
+            resetAgent(false);
+        } else {
+            // Fresh start or resume: capture current location as the run's start point
+            agentStartPos = { x: Math.floor(agent.position.x), y: Math.floor(agent.position.z) };
+            
+            // Ensure solver has a valid plan for the current start
+            currentSolver.iterate(currentSolverType === 'astar' ? agent.virtualPosition : agent.position);
+        }
+
+        isSimulationRunning = true;
+        agent.isStopped = false;
+        agent.stopReason = 'none';
+        agent.setMode(currentSolverType);
+
+        // UI Update
+        const playBtn = document.getElementById('btn-play-simulation');
+        if (playBtn) {
+            playBtn.textContent = '⏹ STOP';
+            playBtn.style.borderColor = 'var(--jay-color-neon-pink)';
+            playBtn.style.color = 'var(--jay-color-neon-pink)';
+        }
+    };
+
+    const stopSimulation = () => {
+        isSimulationRunning = false;
+        
+        // UI Update
+        const playBtn = document.getElementById('btn-play-simulation');
+        if (playBtn) {
+            playBtn.textContent = '▶ RUN';
+            playBtn.style.borderColor = 'var(--jay-color-neon-green)';
+            playBtn.style.color = 'var(--jay-color-neon-green)';
+        }
+    };
+
+    const resetAgent = (toInitial: boolean = true) => {
+        const wasRunning = isSimulationRunning;
+        stopSimulation();
+        
+        // Determine target (Home vs Start of Run)
+        const target = toInitial ? initialAgentStartPos : agentStartPos;
+        
+        // Reset Agent state
+        agent.setPosition(target.x, target.y);
+        agent.isStopped = false;
+        agent.stopReason = 'none';
+        
+        if (toInitial) {
+            agentStartPos = { ...initialAgentStartPos };
+        }
+
+        // Reset Solver state and force immediate re-plan
+        currentSolver.reset();
+        agent.setMode(currentSolverType);
+        currentSolver.iterate(currentSolverType === 'astar' ? agent.virtualPosition : agent.position);
+        
+        // Refresh visual renderers immediately so the path update is visible
+        const values = currentSolver.getValues();
+        flowRenderer.updatePolicy(currentSolver.policy, values, currentSolverType);
+        gridRenderer.updateVisuals(values, currentSolverType);
+    };
 
     // --- Game Lifecycle ---
 
@@ -121,6 +191,9 @@ const createScene = () => {
 
         agent = new Agent(gridSystem, scene, 0, 0);
         agent.setMode(currentSolverType);
+        
+        initialAgentStartPos = { x: 0, y: 0 };
+        agentStartPos = { x: 0, y: 0 };
 
         // 3. Camera & Picking Ground
         const centerX = width / 2;
@@ -234,16 +307,19 @@ const createScene = () => {
         toolsSection.appendChild(grpInspect);
 
         // --- 2. Controls (Simulate) ---
+        const selectorsRow = document.createElement('div');
+        selectorsRow.style.display = 'flex';
+        selectorsRow.style.gap = '10px';
+        selectorsRow.style.marginBottom = '10px';
         
         const scenarioDiv = document.createElement('div');
-        scenarioDiv.className = 'solver-switch';
-        scenarioDiv.style.marginBottom = '10px';
+        scenarioDiv.style.flex = '1';
         scenarioDiv.style.display = 'flex';
-        scenarioDiv.style.justifyContent = 'space-between';
-        scenarioDiv.style.alignItems = 'center';
+        scenarioDiv.style.flexDirection = 'column';
+        scenarioDiv.style.gap = '4px';
         scenarioDiv.innerHTML = `
-             <label style="color: white; font-family: monospace;">Scenario:</label>
-             <select id="scenario-select" style="background: var(--jay-panel-bg); color: var(--jay-accent-primary); border: 1px solid var(--jay-accent-primary); padding: 2px;">
+             <label style="color: var(--jay-text-muted); font-family: monospace; font-size: 11px; text-transform: uppercase;">Scenario</label>
+             <select id="scenario-select" style="background: var(--jay-panel-bg); color: var(--jay-accent-primary); border: 1px solid var(--jay-accent-primary); padding: 8px; width: 100%; border-radius: 4px; font-size: 14px; cursor: pointer;">
                  <option value="" selected disabled>Select...</option>
                  <option value="01_20_straight_no_wall_no_fan">Straight (Empty)</option>
                  <option value="02_20_straight_wall_no_fan">Straight (Wall)</option>
@@ -252,29 +328,36 @@ const createScene = () => {
         `;
         
         const solverDiv = document.createElement('div');
-        solverDiv.className = 'solver-switch';
-        solverDiv.style.marginBottom = '15px';
+        solverDiv.style.flex = '1';
         solverDiv.style.display = 'flex';
         solverDiv.style.flexDirection = 'column';
-        solverDiv.style.gap = '10px';
+        solverDiv.style.gap = '4px';
         solverDiv.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label style="color: white; font-family: monospace;">Algorithm:</label>
-                <select id="solver-select" style="background: var(--jay-panel-bg); color: var(--jay-accent-primary); border: 1px solid var(--jay-accent-primary); padding: 2px;">
-                    <option value="astar" selected>A* (Deterministic)</option>
-                    <option value="mdp">MDP (Probabilistic)</option>
-                </select>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label style="color: white; font-family: monospace;">View:</label>
-                <div style="display: flex; gap: 5px;">
-                    <button id="btn-view-iso" style="background: var(--jay-panel-bg); color: var(--jay-accent-primary); border: 1px solid var(--jay-accent-primary); cursor: pointer; padding: 2px 6px;">Angled</button>
-                    <button id="btn-view-top" style="background: var(--jay-panel-bg); color: var(--jay-accent-primary); border: 1px solid var(--jay-accent-primary); cursor: pointer; padding: 2px 6px;">Top</button>
-                </div>
+            <label style="color: var(--jay-text-muted); font-family: monospace; font-size: 11px; text-transform: uppercase;">Algorithm</label>
+            <select id="solver-select" style="background: var(--jay-panel-bg); color: var(--jay-accent-primary); border: 1px solid var(--jay-accent-primary); padding: 8px; width: 100%; border-radius: 4px; font-size: 14px; cursor: pointer;">
+                <option value="astar" selected>A* (Deterministic)</option>
+                <option value="mdp">MDP (Probabilistic)</option>
+            </select>
+        `;
+
+        selectorsRow.appendChild(scenarioDiv);
+        selectorsRow.appendChild(solverDiv);
+
+        const viewDiv = document.createElement('div');
+        viewDiv.style.display = 'flex';
+        viewDiv.style.justifyContent = 'space-between';
+        viewDiv.style.alignItems = 'center';
+        viewDiv.style.marginBottom = '15px';
+        viewDiv.innerHTML = `
+            <label style="color: white; font-family: monospace;">View Camera:</label>
+            <div style="display: flex; gap: 5px;">
+                <button id="btn-view-iso" style="background: var(--jay-panel-bg); color: var(--jay-accent-primary); border: 1px solid var(--jay-accent-primary); cursor: pointer; padding: 6px 12px; border-radius: 4px;">Angled</button>
+                <button id="btn-view-top" style="background: var(--jay-panel-bg); color: var(--jay-accent-primary); border: 1px solid var(--jay-accent-primary); cursor: pointer; padding: 6px 12px; border-radius: 4px;">Top</button>
             </div>
         `;
 
         const runControls = document.createElement('div');
+
         runControls.style.display = 'flex';
         runControls.style.gap = '10px';
         runControls.style.marginTop = '15px';
@@ -286,8 +369,8 @@ const createScene = () => {
         playBtn.textContent = '▶ RUN';
         playBtn.className = 'mode-btn';
         playBtn.style.flex = '1';
-        playBtn.style.borderColor = 'var(--jay-accent-primary)';
-        playBtn.style.color = 'var(--jay-accent-primary)';
+        playBtn.style.borderColor = 'var(--jay-color-neon-green)';
+        playBtn.style.color = 'var(--jay-color-neon-green)';
         
         const resetBtn = document.createElement('button');
         resetBtn.textContent = '↺ RESET AGENT';
@@ -400,15 +483,15 @@ const createScene = () => {
 
             if (mode === 'simulate') {
                 grpSimulate.style.display = 'block';
-                grpSimulate.appendChild(scenarioDiv);
-                grpSimulate.appendChild(solverDiv);
+                grpSimulate.appendChild(selectorsRow);
+                grpSimulate.appendChild(viewDiv);
                 grpSimulate.appendChild(runControls);
                 grpSimulate.appendChild(legendDiv);
                 setActiveTool('inspect');
             } else if (mode === 'build') {
                 grpBuild.style.display = 'block';
-                grpBuild.appendChild(scenarioDiv);
-                grpBuild.appendChild(solverDiv);
+                grpBuild.appendChild(selectorsRow);
+                grpBuild.appendChild(viewDiv);
                 grpBuild.appendChild(gridSizeDiv);
                 grpBuild.appendChild(ioDiv);
                 grpBuild.appendChild(windControls);
@@ -433,7 +516,7 @@ const createScene = () => {
         };
 
         // --- Event Wiring ---
-        const scenarioSelect = scenarioDiv.querySelector('#scenario-select') as HTMLSelectElement;
+        const scenarioSelect = selectorsRow.querySelector('#scenario-select') as HTMLSelectElement;
         scenarioSelect.onchange = async (e) => {
             const filename = (e.target as HTMLSelectElement).value;
             if (filename) {
@@ -458,6 +541,7 @@ const createScene = () => {
                          windRenderer.updateWindData(); 
                          if (startPos) {
                              agent.setPosition(startPos.agentX, startPos.agentY);
+                             initialAgentStartPos = { x: startPos.agentX, y: startPos.agentY };
                              agentStartPos = { x: startPos.agentX, y: startPos.agentY };
                          }
                     }
@@ -465,39 +549,27 @@ const createScene = () => {
             }
         };
 
-        const algoSelect = solverDiv.querySelector('#solver-select') as HTMLSelectElement;
+        const algoSelect = selectorsRow.querySelector('#solver-select') as HTMLSelectElement;
         algoSelect.onchange = (e) => {
             const val = (e.target as HTMLSelectElement).value;
             if (val === 'mdp') { currentSolver = mdpSolver; currentSolverType = 'mdp'; currentSolver.reset(); } 
             else { currentSolver = aStarSolver; currentSolverType = 'astar'; currentSolver.reset(); }
             agent.setMode(currentSolverType);
         };
-        (solverDiv.querySelector('#btn-view-iso') as HTMLButtonElement).onclick = () => setCameraView('iso');
-        (solverDiv.querySelector('#btn-view-top') as HTMLButtonElement).onclick = () => setCameraView('top');
-
-        playBtn.onclick = () => {
-            isSimulationRunning = !isSimulationRunning;
-            if (isSimulationRunning) {
-                playBtn.textContent = '⏹ STOP';
-                playBtn.style.borderColor = 'var(--jay-color-neon-pink)';
-                playBtn.style.color = 'var(--jay-color-neon-pink)';
-                agent.isStopped = false;
-                agent.stopReason = 'none';
-                agentStartPos = { x: Math.floor(agent.position.x), y: Math.floor(agent.position.z) };
-                agent.setMode(currentSolverType);
-            } else {
-                playBtn.textContent = '▶ RUN';
-                playBtn.style.borderColor = 'var(--jay-accent-primary)';
-                playBtn.style.color = 'var(--jay-accent-primary)';
-            }
-        };
-        resetBtn.onclick = () => {
-             if (isSimulationRunning) playBtn.click();
-             agent.setPosition(agentStartPos.x, agentStartPos.y);
-             currentSolver.reset();
-        };
-
-        const gridSizeSelect = gridSizeDiv.querySelector('#grid-size-select') as HTMLSelectElement;
+                (viewDiv.querySelector('#btn-view-iso') as HTMLButtonElement).onclick = () => setCameraView('iso');
+                (viewDiv.querySelector('#btn-view-top') as HTMLButtonElement).onclick = () => setCameraView('top');
+        
+                playBtn.onclick = () => {
+                    if (!isSimulationRunning) 
+                        startSimulation();
+                    else stopSimulation();
+                };
+        
+                resetBtn.onclick = () => {
+                    resetAgent();
+                };
+        
+                const gridSizeSelect = gridSizeDiv.querySelector('#grid-size-select') as HTMLSelectElement;
         gridSizeSelect.onchange = (e) => {
             const val = (e.target as HTMLSelectElement).value;
             if (val) {
@@ -725,7 +797,11 @@ const createScene = () => {
     const teleportAgent = (point: Vector3 | null | undefined) => {
         if (!point) return;
         const x = Math.floor(point.x); const y = Math.floor(point.z);
-        if (gridSystem.isValid(x, y)) agent.setPosition(x, y);
+        if (gridSystem.isValid(x, y)) {
+            agent.setPosition(x, y);
+            initialAgentStartPos = { x, y };
+            agentStartPos = { x, y };
+        }
     }
 
     return scene;

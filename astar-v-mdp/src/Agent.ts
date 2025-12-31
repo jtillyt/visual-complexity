@@ -33,6 +33,7 @@ export class Agent {
     
     // Animation
     private propellers: Mesh[] = [];
+    private trailMaterial: StandardMaterial;
 
     constructor(gridSystem: GridSystem, scene: Scene, startX: number, startY: number) {
         this.gridSystem = gridSystem;
@@ -42,6 +43,11 @@ export class Agent {
         
         this.lastGridPos = { x: startX, y: startY };
         this.visitedPath.push(this.position.clone());
+
+        // Create persistent material for the trail
+        this.trailMaterial = new StandardMaterial("trailMat", this.scene);
+        this.trailMaterial.emissiveColor = Color3.FromHexString("#4cc9f0"); // Sky Aqua
+        this.trailMaterial.disableLighting = true;
 
         this.mesh = this.createMesh();
         this.updateMeshPosition();
@@ -152,7 +158,8 @@ export class Agent {
         const currentGridZ = Math.floor(this.position.z);
         
         if (currentGridX !== this.lastGridPos.x || currentGridZ !== this.lastGridPos.y) {
-            this.visitedPath.push(new Vector3(currentGridX + 0.5, 0.2, currentGridZ + 0.5));
+            // Push point at same height as drone
+            this.visitedPath.push(new Vector3(currentGridX + 0.5, 0.4, currentGridZ + 0.5));
             this.lastGridPos = { x: currentGridX, y: currentGridZ };
         }
         this.updateTrail();
@@ -324,9 +331,14 @@ export class Agent {
         if (this.visitedPath.length === 0) return;
         
         // Construct points: History + Current Position
-        const points = [...this.visitedPath, this.position];
+        const points = [...this.visitedPath, this.position.clone()];
         
         if (points.length < 2) return;
+
+        // Ensure last two points are not identical (CreateTube requirement)
+        const p1 = points[points.length - 2];
+        const p2 = points[points.length - 1];
+        if (Vector3.Distance(p1, p2) < 0.01) return;
 
         if (this.trailMesh) {
             this.trailMesh.dispose();
@@ -335,15 +347,12 @@ export class Agent {
         this.trailMesh = MeshBuilder.CreateTube("trail", {
             path: points,
             radius: 0.05,
-            tessellation: 6, // Low-poly tube for performance
+            tessellation: 6,
             cap: Mesh.NO_CAP,
             updatable: false 
         }, this.scene);
         
-        const mat = new StandardMaterial("trailMat", this.scene);
-        mat.emissiveColor = Color3.FromHexString("#4cc9f0"); // Sky Aqua
-        mat.disableLighting = true;
-        this.trailMesh.material = mat;
+        this.trailMesh.material = this.trailMaterial;
     }
     
     public setPosition(x: number, y: number) {
