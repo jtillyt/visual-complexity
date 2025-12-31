@@ -63,12 +63,12 @@ export class Agent {
         bodyMat.specularColor = new Color3(0.5, 0.5, 0.5);
         
         const glowMat = new StandardMaterial("glowMat", this.scene);
-        glowMat.emissiveColor = Color3.FromHexString("#4cc9f0"); 
-        glowMat.disableLighting = true;
+        glowMat.emissiveColor = Color3.FromHexString("#4cf083"); 
+        glowMat.disableLighting = false;
 
         const propMat = new StandardMaterial("propMat", this.scene);
-        propMat.diffuseColor = Color3.FromHexString("#4cc9f0");
-        propMat.emissiveColor = Color3.FromHexString("#4cc9f0").scale(0.3); // Dim glow
+        propMat.diffuseColor = Color3.FromHexString("#ffffff");
+        propMat.emissiveColor = Color3.FromHexString("#ffffff").scale(0.5); // Dim glow
 
         // --- Geometry ---
         // 1. Central Body

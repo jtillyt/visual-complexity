@@ -57,9 +57,9 @@ export class GridRenderer {
 
     private createFloorMesh(): Mesh {
         // TILE_THICKNESS: Adjust this value to change the base height of floor cubes
-        const tileThickness = 0.01;
+        const tileThickness = 0.02;
         const tile = MeshBuilder.CreateBox("floorTile", { width: 1.0, height: tileThickness, depth: 1.0 }, this.scene);
-        tile.useVertexColors = false; 
+        tile.useVertexColors = true; 
         
         const material = new StandardMaterial("floorMat", this.scene);
         
@@ -77,8 +77,8 @@ export class GridRenderer {
 
         material.emissiveTexture = texture;
         material.opacityTexture = texture;
-        material.diffuseColor = Color3.White();
-        material.disableLighting = false;
+        material.diffuseColor = Color3.Black();
+        material.disableLighting = true; 
         material.backFaceCulling = false; 
         material.emissiveColor = Color3.White(); 
 
@@ -299,23 +299,25 @@ export class GridRenderer {
             case CellType.Wall:
                 break;
             case CellType.Wind:
-                r = 0.0; g = 0.6; b = 1.0; 
+                // Blue Energy (#4895ef) -> 0.28, 0.58, 0.94
+                r = 0.28; g = 0.58; b = 0.94; 
                 break;
             case CellType.Goal:
-                r = 0.0; g = 1.0; b = 0.5; 
+                // Sky Aqua (#4cc9f0) -> 0.3, 0.79, 0.94
+                r = 0.3; g = 0.79; b = 0.94; 
                 break;
             case CellType.Empty:
             default:
                 if (mode === 'astar') {
                     if (value > 0.9) {
-                        r = 0.0; g = 1.0; b = 0.5; 
+                        r = 0.3; g = 0.79; b = 0.94; // Sky Aqua (Vibrant)
                     } else if (value > 0.1) {
-                        r = 0.0; g = 0.3; b = 0.2; 
+                        r = 0.15; g = 0.4; b = 0.47; // Mid Sky Aqua
                     } else {
-                        r = 0.05; g = 0.15; b = 0.25; 
+                        r = 0.3; g = 0.32; b = 0.38; // Brighter Floor Base
                     }
                 } else {
-                    r = 0.05; g = 0.15; b = 0.25;
+                    r = 0.3; g = 0.32; b = 0.38; // Brighter Floor Base
                 }
                 break;
         }

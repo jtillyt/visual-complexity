@@ -7,7 +7,6 @@ import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
-import { GlowLayer } from '@babylonjs/core/Layers/glowLayer';
 import "@babylonjs/core/Culling/ray"; 
 
 import { GridSystem, CellType } from './GridSystem';
