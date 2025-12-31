@@ -242,16 +242,34 @@ const createScene = () => {
 
         // Update Altitude
         const altNeedle = document.getElementById('alt-needle');
+        const altReadout = document.getElementById('alt-readout');
         if (altNeedle) {
-             const deg = (camera.beta * 180 / Math.PI) - 90;
-             altNeedle.style.transform = `rotate(${deg}deg)`;
+             const betaDeg = (camera.beta * 180 / Math.PI);
+             const needleDeg = betaDeg - 90;
+             altNeedle.style.transform = `rotate(${needleDeg}deg)`;
+             
+             if (altReadout) {
+                 const displayAlt = Math.round(90 - betaDeg);
+                 altReadout.textContent = `${displayAlt}°`;
+             }
         }
         
         // Update Compass
         const compass = document.getElementById('compass-container');
+        const compassReadout = document.getElementById('compass-readout');
         if (compass) {
-            const deg = (camera.alpha * 180 / Math.PI) + 90;
-            compass.style.transform = `rotate(${deg}deg)`;
+            const alphaDeg = (camera.alpha * 180 / Math.PI) + 90;
+            compass.style.transform = `rotate(${alphaDeg}deg)`;
+            
+            if (compassReadout) {
+                // Normalize alpha to 0-360
+                // Babylon alpha is usually CCW? Let's check.
+                // Standard compass: 0=N, 90=E, 180=S, 270=W.
+                // Our alpha is the camera's orbital angle.
+                let displayAlpha = Math.round(-camera.alpha * 180 / Math.PI) % 360;
+                if (displayAlpha < 0) displayAlpha += 360;
+                compassReadout.textContent = `${displayAlpha}°`;
+            }
         }
     });
 
@@ -725,6 +743,7 @@ const createScene = () => {
             <div style="${labelStyle} right: 5px; top: 50%; transform: translateY(-50%);">SIDE</div>
             <div id="alt-needle" style="position: absolute; top: 50%; left: 50%; width: 35px; height: 2px; background: var(--jay-accent-primary); transform-origin: 0% 50%;"></div>
             <div style="position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: var(--jay-accent-primary); transform: translate(-50%, -50%); border-radius: 50%;"></div>
+            <div id="alt-readout" style="${labelStyle} bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 10px; opacity: 0.8;">0°</div>
         `;
         topBar.appendChild(altitude);
 
@@ -744,6 +763,7 @@ const createScene = () => {
             <div style="${labelStyle} left: 5px; top: 50%; transform: translateY(-50%);">W</div>
             <div style="${labelStyle} right: 5px; top: 50%; transform: translateY(-50%);">E</div>
             <div style="position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: var(--jay-accent-primary); transform: translate(-50%, -50%); border-radius: 50%;"></div>
+            <div id="compass-readout" style="${labelStyle} bottom: 18px; left: 50%; transform: translateX(-50%); font-size: 10px; opacity: 0.8;">0°</div>
         `;
         topBar.appendChild(compass);
         mainLayout.appendChild(topBar);
