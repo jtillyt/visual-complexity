@@ -56,8 +56,10 @@ export class GridRenderer {
     }
 
     private createFloorMesh(): Mesh {
-        const tile = MeshBuilder.CreateBox("floorTile", { size: 1.0 }, this.scene);
-        tile.useVertexColors = true; 
+        // TILE_THICKNESS: Adjust this value to change the base height of floor cubes
+        const tileThickness = 0.01;
+        const tile = MeshBuilder.CreateBox("floorTile", { width: 1.0, height: tileThickness, depth: 1.0 }, this.scene);
+        tile.useVertexColors = false; 
         
         const material = new StandardMaterial("floorMat", this.scene);
         
@@ -67,7 +69,7 @@ export class GridRenderer {
         const ctx = texture.getContext();
         ctx.clearRect(0, 0, 128, 128);
         ctx.strokeStyle = "white";
-        ctx.lineWidth = 15;
+        ctx.lineWidth = 20;
         ctx.strokeRect(0, 0, 128, 128);
         texture.update();
         texture.updateSamplingMode(Texture.TRILINEAR_SAMPLINGMODE);
@@ -75,8 +77,8 @@ export class GridRenderer {
 
         material.emissiveTexture = texture;
         material.opacityTexture = texture;
-        material.diffuseColor = Color3.Black();
-        material.disableLighting = true; 
+        material.diffuseColor = Color3.White();
+        material.disableLighting = false;
         material.backFaceCulling = false; 
         material.emissiveColor = Color3.White(); 
 
@@ -90,9 +92,45 @@ export class GridRenderer {
     private createWallMesh(): Mesh {
         const wall = MeshBuilder.CreateBox("wallBlock", { size: 1.0 }, this.scene);
         const material = new StandardMaterial("wallMat", this.scene);
-        material.emissiveColor = new Color3(0.3, 0.6, 1.0); // Cyberpunk Blue
-        material.disableLighting = true; 
+        
+        // Cyberpunk Wall Texture (Bordered/Beveled Look)
+        const texture = new DynamicTexture("wallTex", { width: 128, height: 128 }, this.scene, false);
+        const ctx = texture.getContext();
+        
+        // 1. Base Dark Background
+        ctx.fillStyle = "#3a79c2"; 
+        ctx.fillRect(0, 0, 128, 128);
+        
+        // 2. Primary Border (Blue Energy)
+        ctx.strokeStyle = "#4895ef";
+        ctx.lineWidth = 16;
+        ctx.strokeRect(8, 8, 112, 112);
+        
+        // 3. Inner Detail (Optional subtle cross)
+        // ctx.strokeStyle = "#4895ef33"; // Transparent Blue
+        // ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(30, 30); ctx.lineTo(98, 98);
+        ctx.moveTo(98, 30); ctx.lineTo(30, 98);
+        ctx.stroke();
+
+        // 4. Edge Highlight (Sky Aqua)
+        ctx.strokeStyle = "#4895ef";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(2, 2, 124, 124);
+        
+        texture.update();
+        texture.hasAlpha = false;
+
+        material.diffuseTexture = texture; // Bind to diffuse as well
+        material.emissiveTexture = texture;
+        material.emissiveColor = Color3.White(); 
+        material.diffuseColor = Color3.Black();
+        material.specularColor = Color3.Black();
+        material.disableLighting = false; // Enable lighting pipeline but use Emissive
+        
         wall.material = material;
+        wall.useVertexColors = false; // Ensure vertex colors don't override
         wall.alwaysSelectAsActiveMesh = true;
         wall.isPickable = false;
         return wall;
@@ -153,9 +191,9 @@ export class GridRenderer {
                 const worldZ = y + 0.5;
 
                 if (type === CellType.Wall) {
-                    // Wall
+                    // Wall (Reduced scale to 0.98 to show small gaps between adjacent walls)
                     const matrix = Matrix.Compose(
-                        new Vector3(1.0, 1.0, 1.0),
+                        new Vector3(0.98, 1.0, 0.98),
                         Quaternion.Identity(),
                         new Vector3(worldX, 0.5, worldZ)
                     );
@@ -167,11 +205,13 @@ export class GridRenderer {
                     // Goal: Show Floor + Arrow
                     this.goalIndices.push(index);
                     
-                    // Floor
+                    // Floor (Nearly Flat)
+                    // Scale: 0.95 for small gaps between tiles. Y-Scale: 1.0 (uses base mesh thickness)
+                    // Position: worldY = 0.01 (half of 0.02 thickness) to sit exactly on 0
                     const matrix = Matrix.Compose(
-                        new Vector3(0.95, 0.1, 0.95),
+                        new Vector3(0.95, 1.0, 0.95),
                         Quaternion.Identity(),
-                        new Vector3(worldX, 0.05, worldZ)
+                        new Vector3(worldX, 0.01, worldZ)
                     );
                     matrix.copyToArray(this.matricesFloor, index * 16);
                     zeroMatrix.copyToArray(this.matricesWall, index * 16);
@@ -179,11 +219,13 @@ export class GridRenderer {
                     // Goal Arrow Matrix is updated in animate()
                     
                 } else {
-                    // Normal Floor
+                    // Normal Floor (Nearly Flat)
+                    // Scale: 0.95 for small gaps between tiles. Y-Scale: 1.0 (uses base mesh thickness)
+                    // Position: worldY = 0.01 (half of 0.02 thickness) to sit exactly on 0
                     const matrix = Matrix.Compose(
-                        new Vector3(0.95, 0.1, 0.95),
+                        new Vector3(0.95, 1.0, 0.95),
                         Quaternion.Identity(),
-                        new Vector3(worldX, 0.05, worldZ)
+                        new Vector3(worldX, 0.01, worldZ)
                     );
                     matrix.copyToArray(this.matricesFloor, index * 16);
                     zeroMatrix.copyToArray(this.matricesWall, index * 16);

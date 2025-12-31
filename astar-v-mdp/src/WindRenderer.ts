@@ -70,8 +70,8 @@ export class WindRenderer {
         propeller.bakeCurrentTransformIntoVertices();
         
         const bladeMat = new StandardMaterial("fanBladeMat", this.scene);
-        bladeMat.emissiveColor = Color3.FromHexString("#4895ef"); 
-        bladeMat.disableLighting = true;
+        bladeMat.emissiveColor = Color3.FromHexString("#4cc9f0"); 
+        bladeMat.disableLighting = false;
         propeller.material = bladeMat;
         this.bladeMesh = propeller;
 
@@ -81,8 +81,8 @@ export class WindRenderer {
         dot.bakeCurrentTransformIntoVertices();
         
         const dotMat = new StandardMaterial("windDotMat", this.scene);
-        dotMat.emissiveColor = Color3.FromHexString("#4895ef");
-        dotMat.disableLighting = true;
+        dotMat.emissiveColor = Color3.FromHexString("#4cc9f0");
+        dotMat.disableLighting = false;
         dot.material = dotMat;
         dot.useVertexColors = false;
         this.dotMesh = dot;

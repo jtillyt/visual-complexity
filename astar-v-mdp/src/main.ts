@@ -40,8 +40,8 @@ const createScene = () => {
     scene.clearColor = Color3.FromHexString("#0a0a12").toColor4(); // Deep Void Black/Blue
 
     // --- FX ---
-    const glow = new GlowLayer("glow", scene);
-    glow.intensity = 0.2;
+    //const glow = new GlowLayer("glow", scene);
+    //glow.intensity = 0.0;
 
     // --- Camera Setup ---
     const center = new Vector3(15, -5, 15);
